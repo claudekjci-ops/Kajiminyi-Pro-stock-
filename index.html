@@ -885,7 +885,7 @@ document.addEventListener('keydown', e => {
     if (p) { A.addcart({ id: p.id }); e.target.value = ''; sq = ''; applyGrid(); }
   }
 });
-A.stab = d => { stab = d.t; views.sales($('#view')); };
+A.setab = d => { tab = d.k; views.settings($('#view')); };
 A.scat = d => { scat = d.c; $$('[data-act="scat"]').forEach(b => b.classList.toggle('on', b.dataset.c === scat)); applyGrid(); };
 A.addcart = d => {
   const p = S.products.find(x => x.id === d.id); if (!p) return;
