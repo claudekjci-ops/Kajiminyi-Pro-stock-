@@ -2243,7 +2243,7 @@ function aiSummary() {
 async function askAI(q) {
   let key = ''; try { key = localStorage.getItem('ksp_ai_key') || ''; } catch { /* */ }
   if (!key) return null;
-  const prompt = `Tu es KAJIMINYI ASSISTANT, assistant d'une application de gestion de commerce en RDC. Réponds en français, brièvement, UNIQUEMENT à partir des données JSON ci-dessous. N'invente jamais de chiffre : si l'information manque, dis-le.\nDONNÉES: ${aiSummary()}\nQUESTION: ${q}`;
+  const prompt = `Tu es KAJIMINYI ASSISTANT, assistant d'une application de gestion de commerce en RDC. Réponds en français, brièvement et de façon pratique. Pour les chiffres du commerce, utilise UNIQUEMENT les données JSON ci-dessous et n'invente jamais de chiffre : si l'information manque, dis-le. Pour les conseils généraux (marketing, gestion, stock, clients), tu peux donner des idées concrètes adaptées à un petit commerce en RDC.\nDONNÉES: ${aiSummary()}\nQUESTION: ${q}`;
   const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
