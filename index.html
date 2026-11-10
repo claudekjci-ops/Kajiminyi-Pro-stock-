@@ -377,6 +377,7 @@ const mcur = () => S.settings.mainCur === 'USD' ? 'USD' : 'CDF';
 const money = (n, cur) => nat(cur) === 'CDF' ? cdf(n) : usdx(n);
 const toUSD = (a, cur) => nat(cur) === 'CDF' ? a / S.settings.rate : a;
 const fromUSD = (a, cur) => nat(cur) === 'CDF' ? a * S.settings.rate : a;
+  const supRate = s => (s && num(s.fxRate) > 0) ? num(s.fxRate) : S.settings.rate;
 const fmtDate = ts => new Date(ts).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
 const dayKey = (ts = Date.now()) => {
   const d = new Date(ts);
@@ -1528,6 +1529,7 @@ A.partform = d => {
     <b class="sm">Catégories fournies</b><div class="chkgrid">${S.categories.map(c => `<label class="chk"><input type="checkbox" data-cat="${c.id}" ${sel_.includes(c.id) ? 'checked' : ''}> ${esc(c.name)}</label>`).join('')}</div>
     <div class="two">${sel('Devise des tarifs', 'cur', CURS, x.cur || mcur())}${fld('Délai de livraison (jours)', 'delay', x.delay ?? '', 'number', 'min="0"')}</div>
     ${fld('Conditions de paiement', 'terms', x.terms || '', 'text', 'placeholder="Ex. 30 jours fin de mois"')}
+    ${fld("Taux d'échange de ce fournisseur (1 $ = ? FC) — vide = taux général", 'srate', x.fxRate ?? '', 'number', 'min="0" step="any"')}
     <label>Tarifs / remarques sur les prix<textarea name="tarifs" rows="2">${esc(x.tarifs || '')}</textarea></label>
     <div class="two">${fld('Objectif mensuel d\'achats (' + mcur() + ')', 'target', x.targetUSD ? (S.settings.mainCur === 'USD' ? x.targetUSD : Math.round(x.targetUSD * S.settings.rate)) : '', 'number', 'min="0"')}${fld('Ristourne / remise de fin de mois (%)', 'rist', x.rist ?? '', 'number', 'min="0" max="100"')}</div>
     <div class="two">${fld('Commission sur mes ventes de ses produits (%)', 'comm', x.comm ?? '', 'number', 'min="0" max="100"')}<label class="chk" style="align-self:end"><input type="checkbox" name="commEom" ${x.commEom !== false ? 'checked' : ''}> Payée en fin de mois</label></div>
@@ -1539,7 +1541,8 @@ A.partform = d => {
       if (isC) data.limit = r2(S.settings.mainCur === 'USD' ? num(v.limit) : num(v.limit) / S.settings.rate);
       else {
         const rating = {}; CRITERIA.forEach(([c]) => { if (v['r_' + c] !== '') rating[c] = Math.min(100, Math.max(0, num(v['r_' + c]))); });
-        Object.assign(data, { manager: v.manager, address: v.address, photo: $('#sphoto').value || x.photo || '', cats: $$('[data-cat]', f).filter(c => c.checked).map(c => c.dataset.cat), cur: v.cur, delay: v.delay === '' ? '' : num(v.delay), terms: v.terms, tarifs: v.tarifs,
+                if (v.srate !== '' && !(num(v.srate) > 0)) throw new Error('Taux du fournisseur invalide');
+        Object.assign(data, { manager: v.manager, address: v.address, photo: $('#sphoto').value || x.photo || '', cats: $$('[data-cat]', f).filter(c => c.checked).map(c => c.dataset.cat), cur: v.cur, fxRate: v.srate === '' ? '' : num(v.srate), delay: v.delay === '' ? '' : num(v.delay), terms: v.terms, tarifs: v.tarifs,
           targetUSD: r2(S.settings.mainCur === 'USD' ? num(v.target) : num(v.target) / S.settings.rate), rist: v.rist === '' ? '' : num(v.rist), comm: v.comm === '' ? '' : num(v.comm), commEom: !!v.commEom, promo: v.promo, rating, lat: v.lat === '' ? '' : num(v.lat), lng: v.lng === '' ? '' : num(v.lng) });
       }
       if (!d.id) Object.assign(data, { debt: 0, ts: Date.now(), createdBy: who(), ...(isC ? { spent: 0 } : { bought: 0 }) });
@@ -1571,6 +1574,7 @@ A.pdetail = d => {
     <div class="mi"><span>Téléphone</span><b>${esc(x.phone || '—')}</b></div>
     ${isC ? `<div class="mi"><span>Plafond de crédit</span><b>${usd(x.limit || 0)}</b></div>` : `<div class="mi"><span>Responsable</span><b>${esc(x.manager || '—')}</b></div><div class="mi"><span>Adresse</span><b>${esc(x.address || '—')}</b></div>
       ${x.terms ? `<div class="mi"><span>Conditions de paiement</span><b>${esc(x.terms)}</b></div>` : ''}${x.delay !== '' && x.delay != null ? `<div class="mi"><span>Délai de livraison</span><b>${x.delay} j</b></div>` : ''}${x.tarifs ? `<div class="mi"><span>Tarifs</span><b>${esc(x.tarifs)}</b></div>` : ''}
+     ${x.fxRate ? `<div class="mi"><span>Taux d'échange</span><b>1 $ = ${Number(x.fxRate).toLocaleString('fr-FR')} FC</b></div>` : ''}
       ${x.promo ? `<div class="mi"><span>Promotion</span><b>${esc(x.promo)}</b></div>` : ''}${x.rist !== '' && x.rist != null ? `<div class="mi"><span>Ristourne fin de mois</span><b>${x.rist}% ≈ ${usd(monthBuy * x.rist / 100)} ce mois</b></div>` : ''}
       ${x.comm ? `<h3 style="margin-top:10px">Commissions (${x.comm}% sur mes ventes de ses produits${x.commEom !== false ? ', payées en fin de mois' : ''})</h3>${commRows(x).map(r => `<div class="mi"><span>${esc(r.label)}</span><b>${r.closed ? usd(r.amt) : '<small class="muted">visible à la fin du mois</small>'}</b></div>`).join('')}` : ''}
       ${x.targetUSD ? `<div class="mi"><span>Objectif du mois</span><b>${usd(monthBuy)} / ${usd(x.targetUSD)} (${Math.round(monthBuy / x.targetUSD * 100)}%)</b></div>` : ''}
