@@ -1311,14 +1311,14 @@ A.newpurchase = () => {
       const itemsTotal = r2(T(itemsN)), transport = r2(T(transportN)), total = r2(itemsTotal + transport);
       const id = uid(), ts = dateTs(v.date), proof = await readAttach($('#pjust', w).files[0]);
       const items = L.map(l => ({ pid: l.p.id, name: l.p.name, unit: l.u.name, factor: l.u.factor, qty: l.qty, cost: r2(l.cost), costUSD: r2(T(l.cost)) }));
-      const payAmt = v.payType === 'cash' ? (nat(v.acc) === pc ? totalN : (nat(v.acc) === 'CDF' ? total * R : total)) : 0;
-      const b = batch();
-      b.set('purchases', id, { id, ts, day: dayKey(ts), supplierId: supplier?.id || '', supplierName: supplier?.name || '', items, itemsTotal, transport, total, itemsTotalN: r2(itemsN), transportN: r2(transportN), totalN: r2(totalN), pcur: pc,
-      rate: R, rateDate: S.settings.rateDate || '', supRate: !!(supplier && num(supplier.fxRate) > 0), payType: v.payType, acc: v.payType === 'cash' ? v.acc : '', ...
-      L.forEach(l => {
-        const base = l.qty * l.u.factor, share = itemsN > 0 ? (l.qty * l.cost) / itemsN : 0, landed = base > 0 ? (T(l.qty * l.cost) + transport * share) / base : l.p.buy;
-        b.upd('products', l.p.id, { qty: inc(base), buy: r2(landed), buyAmt: r2(fromUSD(landed, l.p.buyCur || 'USD')), updated: ts, updatedBy: who() });
-      });
+      const items = L.map(l => ({ pid: l.p.id, name: l.p.name, unit: l.u.name, factor: l.u.factor, qty: l.qty, cost: r2(l.cost), costUSD: r2(T(l.cost)) }));
+const payAmt = v.payType === 'cash' ? (nat(v.acc) === pc ? totalN : (nat(v.acc) === 'CDF' ? total * R : total)) : 0;
+const b = batch();
+b.set('purchases', id, { ...comme ci-dessus... });
+L.forEach(l => {
+  const base = l.qty * l.u.factor, share = itemsN > 0 ? (l.qty * l.cost) / itemsN : 0, landed = base > 0 ? (T(l.qty * l.cost) + transport * share) / base : l.p.buy;
+  b.upd('products', l.p.id, { qty: inc(base), buy: r2(landed), buyAmt: r2(fromUSD(landed, l.p.buyCur || 'USD')), updated: ts, updatedBy: who() });
+});
       if (v.payType === 'cash') cashop(b, 'purchase', v.acc, -payAmt, 'Achat stock ' + (supplier?.name || ''), id, ts);
       else b.upd('suppliers', supplier.id, { debt: inc(total), bought: inc(total), last: ts });
       if (supplier && v.payType === 'cash') b.upd('suppliers', supplier.id, { bought: inc(total), last: ts });
