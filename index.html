@@ -1314,7 +1314,7 @@ A.newpurchase = () => {
             const payAmt = v.payType === 'cash' ? (nat(v.acc) === pc ? totalN : (nat(v.acc) === 'CDF' ? total * R : total)) : 0;
       const b = batch();
       b.set('purchases', id, { id, ts, day: dayKey(ts), supplierId: supplier?.id || '', supplierName: supplier?.name || '', items, itemsTotal, transport, total, itemsTotalN: r2(itemsN), transportN: r2(transportN), totalN: r2(totalN), pcur: pc,
-        rate: R, rateDate: S.settings.rateDate || '', supRate: !!(supplier && num(supplier.fxRate) > 0), payType: v.payType, acc: v.payType === 'cash' ? v.acc : '', ...
+      rate: R, rateDate: S.settings.rateDate || '', supRate: !!(supplier && num(supplier.fxRate) > 0), payType: v.payType, acc: v.payType === 'cash' ? v.acc : '', ...
       L.forEach(l => {
         const base = l.qty * l.u.factor, share = itemsN > 0 ? (l.qty * l.cost) / itemsN : 0, landed = base > 0 ? (T(l.qty * l.cost) + transport * share) / base : l.p.buy;
         b.upd('products', l.p.id, { qty: inc(base), buy: r2(landed), buyAmt: r2(fromUSD(landed, l.p.buyCur || 'USD')), updated: ts, updatedBy: who() });
