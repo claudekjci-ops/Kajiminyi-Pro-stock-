@@ -265,6 +265,11 @@ body.ro [data-act^="del"],body.ro [data-act="logodel"]{display:none}
 [data-theme=dark] .login h1{color:#7fe0b6}
 [data-theme=dark] .gbtn{background:#16272a;color:var(--tx)}
 
+/* pas de sélection de texte ni de rebond élastique (sauf dans les champs de saisie) */
+html,body{overscroll-behavior:none;-webkit-overflow-scrolling:auto}
+body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+input,textarea,select,[contenteditable]{-webkit-user-select:text;user-select:text}
+
 </style>
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -398,7 +403,9 @@ function fmtQty(p, q = p.qty) {
 // Forme décimale dans la plus grande unité (ex. 9,9167 Carton)
 function fmtDec(p, q = p.qty) {
   const big = (p.units || []).filter(u => u.factor > 1).sort((a, b) => b.factor - a.factor)[0];
-  return big ? (+(q / big.factor).toFixed(4)).toLocaleString('fr-FR') + ' ' + big.name : '';
+  if (!big) return '';
+  const t = (+(q / big.factor).toFixed(4)).toLocaleString('fr-FR') + ' ' + big.name;
+  return t === fmtQty(p, q) ? '' : t;   // pas de doublon (ex. « 10 Carton ≈ 10 Carton »)
 }
 const fnum = (n, d = 2) => (+n || 0).toLocaleString('fr-FR', { maximumFractionDigits: d });
 
@@ -1075,8 +1082,10 @@ A.pform = d => {
     <datalist id="unames">${UNIT_NAMES.map(u => `<option>${u}</option>`).join('')}</datalist>
     <div class="row"><img id="pprev" src="${p.photo || ''}" style="width:64px;height:64px;border-radius:12px;object-fit:cover;background:#eee;${p.photo ? '' : 'display:none'}"><label style="flex:1">Photo (appareil photo ou galerie)<input type="file" id="pfile" accept="image/*"></label></div>
     <input type="hidden" id="pphoto">
+    ${d.id ? `<p class="muted sm">ID technique : ${esc(p.id)} · Enregistré le ${p.ts ? fmtDate(p.ts) : '—'}${p.createdBy ? ' par ' + esc(p.createdBy) : ''}</p>` : '<p class="muted sm">La date d\'enregistrement et l\'identifiant technique sont créés automatiquement.</p>'}
     ${fld('Nom du produit', 'name', p.name || '', 'text', 'required')}
-    <div class="two">${fld('Code produit', 'code', p.code || '', 'text', 'placeholder="Auto si vide"')}${fld('Code-barres (facultatif)', 'barcode', p.barcode || '')}</div>
+    <div class="two">${fld('Identifiant produit (code)', 'code', p.code || '', 'text', 'placeholder="Auto si vide"')}<label>Code-barres<span class="row" style="flex-wrap:nowrap"><input name="barcode" value="${esc(p.barcode || '')}" inputmode="numeric" placeholder="Scanner ou saisir" style="flex:1;min-width:0">${'BarcodeDetector' in window ? `<button type="button" class="btn ghost sm" data-act="pscan" aria-label="Scanner">${ic('scan', 18)}</button>` : ''}</span></label></div>
+    ${'BarcodeDetector' in window ? '' : '<p class="muted sm">Scan caméra indisponible sur ce navigateur : saisissez le code ou utilisez un lecteur (Bluetooth/USB) qui tape le code dans le champ.</p>'}
     <div class="two">${sel('Catégorie', 'cat', S.categories.map(c => [c.id, c.name]), p.cat)}${fld('Marque', 'brand', p.brand || '')}</div>
     <label>Qualité<input name="quality" list="qlist" value="${esc(p.quality || '')}" placeholder="Premium, Standard, Économique…"><datalist id="qlist"><option>Premium</option><option>Standard</option><option>Économique</option><option>Importé</option><option>Local</option></datalist></label>
     ${sel('Fournisseur', 'supplierId', [['', '— Aucun —'], ...S.suppliers.map(s => [s.id, s.name])], p.supplierId || '')}
@@ -1084,7 +1093,8 @@ A.pform = d => {
     <div class="two">${fld("Prix d'achat", 'buyAmt', p.buyAmt ?? p.buy ?? '', 'number', 'required min="0"')}${sel("Devise d'achat", 'buyCur', CURS, bc)}</div>
     <div class="two">${fld('Prix de vente', 'sellAmt', p.sellAmt ?? p.sell ?? '', 'number', 'required min="0"')}${sel('Devise de vente', 'sellCur', CURS, sc)}</div>
     <div class="two">${sel('Unité de base (la plus petite)', 'unit', UNIT_NAMES, p.unit)}${fld('Stock minimum (unité de base)', 'min', p.min ?? 5, 'number', 'min="0"')}</div>
-    ${d.id ? `<p class="muted sm">Quantité actuelle : <b>${fmtQty(p)}</b>${fmtDec(p) ? ' (≈ ' + fmtDec(p) + ')' : ''} — modifiable via une entrée de stock ou un inventaire.</p>` : fld('Quantité initiale (unité de base)', 'qty', 0, 'number', 'min="0"')}
+    ${d.id ? `<p class="muted sm">Quantité actuelle : <b>${fmtQty(p)}</b>${fmtDec(p) ? ' (≈ ' + fmtDec(p) + ')' : ''}</p>` : ''}
+    <div class="two">${fld(d.id ? 'Corriger la quantité (vide = inchangée)' : 'Quantité initiale', 'qty', d.id ? '' : 0, 'number', 'min="0"')}<label>Exprimée en<select name="qunit" id="qunit"></select></label></div>
     <div class="two">${fld('Date de fabrication (facultatif)', 'mfg', p.mfg || '', 'date')}${fld("Date d'expiration", 'exp', p.exp || '', 'date')}</div>
     <label class="chk"><input type="checkbox" name="suspended" ${p.suspended ? 'checked' : ''}> Suspendre la vente de ce produit</label>
     <div class="hint"><b>Conversions d'unités</b> — ex. unité de base « Bouteille », puis « Carton » contient 12. Le stock est tenu en unité de base : vendre 1 bouteille laisse 11 bouteilles (≈ 0,9167 carton). Les prix par conditionnement sont facultatifs (sinon prix de base × quantité contenue).</div>
@@ -1098,24 +1108,33 @@ A.pform = d => {
         const pa = num(r.querySelector('.u-s').value), ba = num(r.querySelector('.u-b').value);
         return { name: r.querySelector('.u-n').value.trim(), factor: num(r.querySelector('.u-f').value), priceAmt: pa, price: r2(toUSD(pa, v.sellCur)), buyAmt: ba, buy: r2(toUSD(ba, v.buyCur)) };
       }).filter(u => u.name && u.factor > 0 && u.name !== v.unit);
+      const bcode = v.barcode.trim();
+      if (bcode && S.products.some(x => x.id !== d.id && x.barcode === bcode)) throw new Error('Ce code-barres est déjà utilisé par un autre produit');
+      const qf = v.qunit === v.unit ? 1 : (units.find(u => u.name === v.qunit)?.factor || 1);
+      const qtyBase = v.qty === '' ? null : r2(num(v.qty) * qf);
       const photo = $('#pphoto').value || p.photo || '';
       const data = {
-        name, code, barcode: v.barcode.trim(), cat: v.cat, brand: v.brand.trim(), quality: v.quality.trim(), supplierId: v.supplierId, desc: v.desc, photo,
+        name, code, barcode: bcode, cat: v.cat, brand: v.brand.trim(), quality: v.quality.trim(), supplierId: v.supplierId, desc: v.desc, photo,
         buyAmt: num(v.buyAmt), buyCur: v.buyCur, buy: r2(toUSD(num(v.buyAmt), v.buyCur)), sellAmt: num(v.sellAmt), sellCur: v.sellCur, sell: r2(toUSD(num(v.sellAmt), v.sellCur)),
         min: num(v.min), unit: v.unit, units, mfg: v.mfg || '', exp: v.exp || '', suspended: !!v.suspended, updated: Date.now(), updatedBy: who()
       };
       const b = batch();
       if (d.id) {
         const diff = []; [['name', 'nom'], ['buyAmt', 'prix achat'], ['sellAmt', 'prix vente'], ['min', 'stock min'], ['cat', 'catégorie'], ['unit', 'unité'], ['exp', 'expiration'], ['suspended', 'vente suspendue']].forEach(([k, l]) => { if (String(p[k] ?? '') !== String(data[k] ?? '')) diff.push(`${l}: ${p[k] ?? '—'} → ${data[k] || '—'}`); });
-        b.merge('products', d.id, data); jr(b, 'Modification produit', `${name} ${diff.join(' ; ') || '(détails)'}`, null, '', catName(data.cat), d.id);
+        let qtyNote = '';
+        if (qtyBase != null && Math.abs(qtyBase - p.qty) > 1e-9) { data.qty = qtyBase; qtyNote = ` ; quantité: ${fmtQty(p)} → ${fmtQty(p, qtyBase)}`; }
+        b.merge('products', d.id, data); jr(b, 'Modification produit', `${name} ${diff.join(' ; ') || '(détails)'}${qtyNote}`, null, '', catName(data.cat), d.id);
       } else {
-        const id = uid(), qty = num(v.qty);
+        const id = uid(), qty = qtyBase || 0;
         b.set('products', id, { id, ...data, qty, ts: Date.now(), createdBy: who() });
         jr(b, 'Produit créé', `${name} (${code})${qty ? ' — stock initial ' + qty + ' ' + v.unit : ''}`, qty || null, '', catName(data.cat), id);
       }
       b.commit(); toast('Produit enregistré');
+      if (d.id && data.qty != null) askJustif('product', d.id, `Correction de la quantité de « ${name} » : ${fmtQty(p)} → ${fmtQty(p, data.qty)}`);
     }, {
       onOpen: (w, f) => {
+        const fill = () => { const q = $('#qunit', f), cur = q.value, base = f.unit.value, names = [...new Set([base, ...[...f.querySelectorAll('.u-n')].map(i => i.value.trim()).filter(Boolean)])]; q.innerHTML = names.map(n => `<option ${n === (cur || base) ? 'selected' : ''}>${esc(n)}</option>`).join(''); };
+        fill(); f.addEventListener('input', fill); f.addEventListener('change', fill); f.addEventListener('click', () => setTimeout(fill, 0));
         $('#pfile', w).addEventListener('change', async e => {
           const file = e.target.files[0]; if (!file) return;
           const url = await resizeImage(file); $('#pphoto').value = url; const im = $('#pprev'); im.src = url; im.style.display = '';
@@ -1222,6 +1241,22 @@ A.invview = d => {
     <div class="row end"><button class="btn ghost" id="ipdf">PDF</button><button class="btn" id="ixls">Excel</button></div>`, { wide: true });
   $('#ipdf', w).onclick = () => exportPDF(r.title, r.head, r.rows, r.summary);
   $('#ixls', w).onclick = () => exportXLSX(r.title, r.head, r.rows, r.summary);
+};
+
+// Scan du code-barres directement dans la fiche produit
+A.pscan = async () => {
+  const w = modal('Scanner le code-barres', '<video id="psv" playsinline muted style="width:100%;border-radius:12px;background:#000"></video><p class="muted sm">Pointez la caméra vers le code-barres du produit.</p>');
+  let stream, on = true; const stop = () => { on = false; stream?.getTracks().forEach(t => t.stop()); };
+  w.addEventListener('click', e => { if (e.target === w || e.target.closest('[data-close]')) stop(); });
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    const v = $('#psv', w); v.srcObject = stream; await v.play(); const det = new BarcodeDetector();
+    while (on) {
+      const r = await det.detect(v).catch(() => []);
+      if (r.length) { const code = r[0].rawValue, inp = document.querySelector('.modal-wrap form input[name=barcode]'); stop(); w.close(); if (inp) { inp.value = code; inp.dispatchEvent(new Event('input', { bubbles: true })); } toast('Code lu : ' + code); return; }
+      await new Promise(r => setTimeout(r, 300));
+    }
+  } catch { stop(); w.close(); toast('Caméra non autorisée ou indisponible', 'err'); }
 };
 
 }
