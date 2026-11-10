@@ -377,7 +377,6 @@ const mcur = () => S.settings.mainCur === 'USD' ? 'USD' : 'CDF';
 const money = (n, cur) => nat(cur) === 'CDF' ? cdf(n) : usdx(n);
 const toUSD = (a, cur) => nat(cur) === 'CDF' ? a / S.settings.rate : a;
 const fromUSD = (a, cur) => nat(cur) === 'CDF' ? a * S.settings.rate : a;
-  const supRate = s => (s && num(s.fxRate) > 0) ? num(s.fxRate) : S.settings.rate;
 const fmtDate = ts => new Date(ts).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
 const dayKey = (ts = Date.now()) => {
   const d = new Date(ts);
@@ -885,7 +884,7 @@ document.addEventListener('keydown', e => {
     if (p) { A.addcart({ id: p.id }); e.target.value = ''; sq = ''; applyGrid(); }
   }
 });
-A.setab = d => { tab = d.k; views.settings($('#view')); };
+A.stab = d => { stab = d.t; views.sales($('#view')); };
 A.scat = d => { scat = d.c; $$('[data-act="scat"]').forEach(b => b.classList.toggle('on', b.dataset.c === scat)); applyGrid(); };
 A.addcart = d => {
   const p = S.products.find(x => x.id === d.id); if (!p) return;
@@ -1304,21 +1303,21 @@ A.newpurchase = () => {
     <div class="totbox"><div class="row sp"><span>TOTAL</span><b id="ptot" class="big">0</b></div><div class="muted sm" id="ptot2"></div></div>`,
     async (v, w, f) => {
       const L = readLines(f).filter(l => l.qty > 0); if (!L.length) throw new Error('Ajoutez au moins un produit avec une quantité');
-      const supplier = S.suppliers.find(s => s.id === v.supplier), pc = v.pcur, R = supRate(supplier), T = x => nat(pc) === 'CDF' ? x / R : x;
+      const supplier = S.suppliers.find(s => s.id === v.supplier), pc = v.pcur, T = x => toUSD(x, pc);
       if (v.payType === 'credit' && !supplier) throw new Error('Choisissez un fournisseur pour un achat à crédit');
       if (v.payType === 'cash' && !v.acc) throw new Error('Aucun mode de paiement disponible : activez-en un dans les paramètres');
       const transportN = num(v.transport), itemsN = sum(L, l => l.qty * l.cost), totalN = itemsN + transportN;
       const itemsTotal = r2(T(itemsN)), transport = r2(T(transportN)), total = r2(itemsTotal + transport);
       const id = uid(), ts = dateTs(v.date), proof = await readAttach($('#pjust', w).files[0]);
       const items = L.map(l => ({ pid: l.p.id, name: l.p.name, unit: l.u.name, factor: l.u.factor, qty: l.qty, cost: r2(l.cost), costUSD: r2(T(l.cost)) }));
-      const items = L.map(l => ({ pid: l.p.id, name: l.p.name, unit: l.u.name, factor: l.u.factor, qty: l.qty, cost: r2(l.cost), costUSD: r2(T(l.cost)) }));
-const payAmt = v.payType === 'cash' ? (nat(v.acc) === pc ? totalN : (nat(v.acc) === 'CDF' ? total * R : total)) : 0;
-const b = batch();
-b.set('purchases', id, { ...comme ci-dessus... });
-L.forEach(l => {
-  const base = l.qty * l.u.factor, share = itemsN > 0 ? (l.qty * l.cost) / itemsN : 0, landed = base > 0 ? (T(l.qty * l.cost) + transport * share) / base : l.p.buy;
-  b.upd('products', l.p.id, { qty: inc(base), buy: r2(landed), buyAmt: r2(fromUSD(landed, l.p.buyCur || 'USD')), updated: ts, updatedBy: who() });
-});
+      const payAmt = v.payType === 'cash' ? (nat(v.acc) === pc ? totalN : fromUSD(total, v.acc)) : 0;
+      const b = batch();
+      b.set('purchases', id, { id, ts, day: dayKey(ts), supplierId: supplier?.id || '', supplierName: supplier?.name || '', items, itemsTotal, transport, total, itemsTotalN: r2(itemsN), transportN: r2(transportN), totalN: r2(totalN), pcur: pc,
+        rate: S.settings.rate, rateDate: S.settings.rateDate || '', payType: v.payType, acc: v.payType === 'cash' ? v.acc : '', cur: v.payType === 'cash' ? nat(v.acc) : '', due: v.payType === 'credit' ? v.due : '', note: v.note, proof, uid: S.user.uid, userName: who() });
+      L.forEach(l => {
+        const base = l.qty * l.u.factor, share = itemsN > 0 ? (l.qty * l.cost) / itemsN : 0, landed = base > 0 ? (T(l.qty * l.cost) + transport * share) / base : l.p.buy;
+        b.upd('products', l.p.id, { qty: inc(base), buy: r2(landed), buyAmt: r2(fromUSD(landed, l.p.buyCur || 'USD')), updated: ts, updatedBy: who() });
+      });
       if (v.payType === 'cash') cashop(b, 'purchase', v.acc, -payAmt, 'Achat stock ' + (supplier?.name || ''), id, ts);
       else b.upd('suppliers', supplier.id, { debt: inc(total), bought: inc(total), last: ts });
       if (supplier && v.payType === 'cash') b.upd('suppliers', supplier.id, { bought: inc(total), last: ts });
@@ -1332,19 +1331,19 @@ L.forEach(l => {
         const calc = () => {
           const L = readLines(f); L.forEach(l => { l.row.querySelector('.pl-s').textContent = money(l.qty * l.cost, pcur()); });
           const tN = sum(L, l => l.qty * l.cost) + num(f.transport.value);
-                    $('#ptot', w).textContent = money(tN, pcur()); const sp = S.suppliers.find(s => s.id === f.supplier.value), R = supRate(sp); $('#ptot2', w).textContent = '≈ ' + usdx(nat(pcur()) === 'CDF' ? tN / R : tN) + ' · ' + (sp && num(sp.fxRate) > 0 ? 'taux du fournisseur' : 'taux général') + ' 1 $ = ' + R.toLocaleString('fr-FR') + ' FC';
+          $('#ptot', w).textContent = money(tN, pcur()); $('#ptot2', w).textContent = '≈ ' + usd(toUSD(tN, pcur())) + ' · taux 1 $ = ' + S.settings.rate.toLocaleString('fr-FR') + ' FC';
           $('#accl', w).style.display = f.payType.value === 'cash' ? '' : 'none'; $('#duel', w).style.display = f.payType.value === 'credit' ? '' : 'none';
         };
         const setPrice = r => {
           const p = S.products.find(x => x.id === r.querySelector('.pl-p').value), u = p && allUnits(p).find(x => x.name === r.querySelector('.pl-u').value);
-          if (u) { const uv = u.buy > 0 ? u.buy : p.buy * u.factor; r.querySelector('.pl-c').value = r2(nat(pcur()) === 'CDF' ? uv * supRate(S.suppliers.find(s => s.id === f.supplier.value)) : uv); }
+          if (u) r.querySelector('.pl-c').value = r2(fromUSD(u.buy > 0 ? u.buy : p.buy * u.factor, pcur()));
         };
         f.addEventListener('change', e => {
           if (e.target.classList.contains('pl-p')) {
             const r = e.target.closest('.pl'), p = S.products.find(x => x.id === e.target.value);
             r.querySelector('.pl-u').innerHTML = (p ? allUnits(p) : []).map(u => `<option>${esc(u.name)}</option>`).join(''); setPrice(r);
           } else if (e.target.classList.contains('pl-u')) setPrice(e.target.closest('.pl'));
-        else if (e.target.name === 'pcur' || e.target.name === 'supplier') $$('.pl', f).forEach(setPrice);
+          else if (e.target.name === 'pcur') $$('.pl', f).forEach(setPrice);
           else if (e.target.name === 'payType') { /* affichage mis à jour par calc */ }
           calc();
         });
@@ -1529,7 +1528,6 @@ A.partform = d => {
     <b class="sm">Catégories fournies</b><div class="chkgrid">${S.categories.map(c => `<label class="chk"><input type="checkbox" data-cat="${c.id}" ${sel_.includes(c.id) ? 'checked' : ''}> ${esc(c.name)}</label>`).join('')}</div>
     <div class="two">${sel('Devise des tarifs', 'cur', CURS, x.cur || mcur())}${fld('Délai de livraison (jours)', 'delay', x.delay ?? '', 'number', 'min="0"')}</div>
     ${fld('Conditions de paiement', 'terms', x.terms || '', 'text', 'placeholder="Ex. 30 jours fin de mois"')}
-    ${fld("Taux d'échange de ce fournisseur (1 $ = ? FC) — vide = taux général", 'srate', x.fxRate ?? '', 'number', 'min="0" step="any"')}
     <label>Tarifs / remarques sur les prix<textarea name="tarifs" rows="2">${esc(x.tarifs || '')}</textarea></label>
     <div class="two">${fld('Objectif mensuel d\'achats (' + mcur() + ')', 'target', x.targetUSD ? (S.settings.mainCur === 'USD' ? x.targetUSD : Math.round(x.targetUSD * S.settings.rate)) : '', 'number', 'min="0"')}${fld('Ristourne / remise de fin de mois (%)', 'rist', x.rist ?? '', 'number', 'min="0" max="100"')}</div>
     <div class="two">${fld('Commission sur mes ventes de ses produits (%)', 'comm', x.comm ?? '', 'number', 'min="0" max="100"')}<label class="chk" style="align-self:end"><input type="checkbox" name="commEom" ${x.commEom !== false ? 'checked' : ''}> Payée en fin de mois</label></div>
@@ -1541,8 +1539,7 @@ A.partform = d => {
       if (isC) data.limit = r2(S.settings.mainCur === 'USD' ? num(v.limit) : num(v.limit) / S.settings.rate);
       else {
         const rating = {}; CRITERIA.forEach(([c]) => { if (v['r_' + c] !== '') rating[c] = Math.min(100, Math.max(0, num(v['r_' + c]))); });
-                if (v.srate !== '' && !(num(v.srate) > 0)) throw new Error('Taux du fournisseur invalide');
-        Object.assign(data, { manager: v.manager, address: v.address, photo: $('#sphoto').value || x.photo || '', cats: $$('[data-cat]', f).filter(c => c.checked).map(c => c.dataset.cat), cur: v.cur, fxRate: v.srate === '' ? '' : num(v.srate), delay: v.delay === '' ? '' : num(v.delay), terms: v.terms, tarifs: v.tarifs,
+        Object.assign(data, { manager: v.manager, address: v.address, photo: $('#sphoto').value || x.photo || '', cats: $$('[data-cat]', f).filter(c => c.checked).map(c => c.dataset.cat), cur: v.cur, delay: v.delay === '' ? '' : num(v.delay), terms: v.terms, tarifs: v.tarifs,
           targetUSD: r2(S.settings.mainCur === 'USD' ? num(v.target) : num(v.target) / S.settings.rate), rist: v.rist === '' ? '' : num(v.rist), comm: v.comm === '' ? '' : num(v.comm), commEom: !!v.commEom, promo: v.promo, rating, lat: v.lat === '' ? '' : num(v.lat), lng: v.lng === '' ? '' : num(v.lng) });
       }
       if (!d.id) Object.assign(data, { debt: 0, ts: Date.now(), createdBy: who(), ...(isC ? { spent: 0 } : { bought: 0 }) });
@@ -1574,7 +1571,6 @@ A.pdetail = d => {
     <div class="mi"><span>Téléphone</span><b>${esc(x.phone || '—')}</b></div>
     ${isC ? `<div class="mi"><span>Plafond de crédit</span><b>${usd(x.limit || 0)}</b></div>` : `<div class="mi"><span>Responsable</span><b>${esc(x.manager || '—')}</b></div><div class="mi"><span>Adresse</span><b>${esc(x.address || '—')}</b></div>
       ${x.terms ? `<div class="mi"><span>Conditions de paiement</span><b>${esc(x.terms)}</b></div>` : ''}${x.delay !== '' && x.delay != null ? `<div class="mi"><span>Délai de livraison</span><b>${x.delay} j</b></div>` : ''}${x.tarifs ? `<div class="mi"><span>Tarifs</span><b>${esc(x.tarifs)}</b></div>` : ''}
-     ${x.fxRate ? `<div class="mi"><span>Taux d'échange</span><b>1 $ = ${Number(x.fxRate).toLocaleString('fr-FR')} FC</b></div>` : ''}
       ${x.promo ? `<div class="mi"><span>Promotion</span><b>${esc(x.promo)}</b></div>` : ''}${x.rist !== '' && x.rist != null ? `<div class="mi"><span>Ristourne fin de mois</span><b>${x.rist}% ≈ ${usd(monthBuy * x.rist / 100)} ce mois</b></div>` : ''}
       ${x.comm ? `<h3 style="margin-top:10px">Commissions (${x.comm}% sur mes ventes de ses produits${x.commEom !== false ? ', payées en fin de mois' : ''})</h3>${commRows(x).map(r => `<div class="mi"><span>${esc(r.label)}</span><b>${r.closed ? usd(r.amt) : '<small class="muted">visible à la fin du mois</small>'}</b></div>`).join('')}` : ''}
       ${x.targetUSD ? `<div class="mi"><span>Objectif du mois</span><b>${usd(monthBuy)} / ${usd(x.targetUSD)} (${Math.round(monthBuy / x.targetUSD * 100)}%)</b></div>` : ''}
@@ -1595,7 +1591,7 @@ function payDebt(x, isC, k) {
   const accs = accOptions(true), def = S.settings.mainCur === 'USD' ? 'USD' : 'CDF';
   form(isC ? 'Remboursement du client' : 'Paiement du fournisseur', `<div class="hint">Dette actuelle : <b>${usd(x.debt)}</b>. ${isC ? 'Le montant sera ajouté à la caisse.' : 'Le montant sera déduit de la caisse (réduction progressive de la dette).'}</div>
     ${sel('Compte', 'acc', accs, def)}${fld('Montant (dans la devise du compte)', 'amt', '', 'number', 'required min="0"')}`, async v => {
-        const amt = num(v.amt), au = (!isC && nat(v.acc) === 'CDF') ? amt / supRate(x) : toUSD(amt, v.acc); if (amt <= 0) throw new Error('Montant invalide');
+    const amt = num(v.amt), au = toUSD(amt, v.acc); if (amt <= 0) throw new Error('Montant invalide');
     if (au > x.debt + 0.01) throw new Error('Le montant dépasse la dette');
     if (!isC && balances()[v.acc] < amt - 1e-9) throw new Error('Solde de ce compte insuffisant');
     const b = batch(); cashop(b, isC ? 'debt_client' : 'debt_supplier', v.acc, isC ? amt : -amt, (isC ? 'Remboursement ' : 'Paiement ') + x.name, x.id);
@@ -2247,16 +2243,10 @@ function aiSummary() {
 async function askAI(q) {
   let key = ''; try { key = localStorage.getItem('ksp_ai_key') || ''; } catch { /* */ }
   if (!key) return null;
-  const prompt = `Tu es KAJIMINYI ASSISTANT, assistant d'une application de gestion de commerce en RDC. Réponds en français, brièvement et de façon pratique. Pour les chiffres du commerce, utilise UNIQUEMENT les données JSON ci-dessous et n'invente jamais de chiffre : si l'information manque, dis-le. Pour les conseils généraux (marketing, gestion, stock, clients), tu peux donner des idées concrètes adaptées à un petit ou grand commerce en RDC.\nDONNÉES: ${aiSummary()}\nQUESTION: ${q}`;
-  const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-  body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }] })
-});
+  const prompt = `Tu es KAJIMINYI ASSISTANT, assistant d'une application de gestion de commerce en RDC. Réponds en français, brièvement, UNIQUEMENT à partir des données JSON ci-dessous. N'invente jamais de chiffre : si l'information manque, dis-le.\nDONNÉES: ${aiSummary()}\nQUESTION: ${q}`;
+  const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + encodeURIComponent(key), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }] }) });
   if (!r.ok) throw new Error('Service IA indisponible (' + r.status + ')');
-  const j = await r.json(); return esc(j.candidates?.[0]?.content?.parts?.[0]?.text || '')
-  .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
-  .replace(/\n/g, '<br>');
+  const j = await r.json(); return esc(j.candidates?.[0]?.content?.parts?.[0]?.text || '').replace(/\n/g, '<br>');
 }
 const SUGG = { sales: ['Comment enregistrer une vente ?', "Quel est mon chiffre d'affaires aujourd'hui ?"], products: ['Comment ajouter un produit ?', 'Vérifie mes données'], purchases: ['Comment enregistrer un crédit fournisseur ?', 'Quels produits dois-je commander ?'], cash: ['Pourquoi ma caisse présente-t-elle un écart ?', 'Quel est le solde de la caisse ?'], expenses: ['Combien ai-je dépensé cette semaine ?', 'Pourquoi ma dépense est-elle bloquée ?'], dashboard: ['Quel produit me rapporte le plus ?', 'Quel est mon bénéfice ce mois ?'], default: ['Quels produits se vendent le plus ?', 'Quels clients ont encore des dettes ?', 'Comment faire un inventaire ?'] };
 A.assistant = () => {
