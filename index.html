@@ -278,6 +278,8 @@ details.adv{border:1px dashed var(--bd);border-radius:12px;padding:8px}details.a
 .scanline{position:absolute;left:8%;right:8%;top:50%;height:2px;background:#ff3b30;box-shadow:0 0 8px #ff3b30;animation:scan 1.6s ease-in-out infinite alternate}
 @keyframes scan{from{top:25%}to{top:75%}}
 
+.bmsg.bot p{margin:4px 0}.bmsg.bot ul,.bmsg.bot ol{margin:4px 0;padding-left:20px}.bmsg.bot .aih{margin-top:10px}.bot .botlog{max-height:52vh}.bmsg.bot{-webkit-user-select:text;user-select:text}
+
 </style>
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2299,34 +2301,100 @@ function answer(q) {
   if (/(comment|aide|expliqu|ou |faire|enregistr|ajout)/.test(n)) { const m = map.find(([r]) => r.test(n)); if (m && HELP[m[1]]) return `<b>${HELP[m[1]][0]}</b> — ${esc(HELP[m[1]][1])} <a href="#/${m[1]}" data-close>Ouvrir ce module</a>`; }
   return null;
 }
-function aiSummary() {
-  const [from, to] = rangeFor('month'), ok = S.sales.filter(s => s.status !== 'cancelled' && s.ts >= from && s.ts <= to), ex = S.expenses.filter(e => e.ts >= from && e.ts <= to), a = {};
-  ok.forEach(s => s.items.forEach(i => { a[i.name] = (a[i.name] || 0) + i.price * i.qty; }));
-  return JSON.stringify({ devise_principale: S.settings.mainCur, taux_1USD_en_CDF: S.settings.rate, mois: { ventes_nb: ok.length, chiffre_affaires_usd_equiv: r00(sum(ok, s => s.total)), cout_usd_equiv: r00(sum(ok, s => s.cost)), depenses_usd_equiv: r00(sum(ex, eu)) }, top_produits: Object.entries(a).sort((x, y) => y[1] - x[1]).slice(0, 5).map(([k, v]) => [k, r00(v)]), ruptures: S.products.filter(p => stockState(p) === 'rupture').map(p => p.name).slice(0, 10), stock_faible: S.products.filter(p => stockState(p) === 'faible').map(p => p.name).slice(0, 10), dettes_clients_usd: r00(sum(S.clients, c => c.debt || 0)), dettes_fournisseurs_usd: r00(sum(S.suppliers, c => c.debt || 0)), caisse_usd_equiv: r00(cashUSD()) });
+/* ---------- Gemini : modèle découvert automatiquement (3.7, puis 3.6, puis le plus récent disponible) ---------- */
+const AI_KEY = 'ksp_ai_key', AI_MODEL = 'ksp_ai_model', AI_PREF = 'ksp_ai_pref', API = 'https://generativelanguage.googleapis.com/v1beta';
+const ls = { get: k => { try { return localStorage.getItem(k) || ''; } catch { return ''; } }, set: (k, v) => { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch { /* */ } } };
+let aiHist = [];
+// Texte Gemini (markdown léger) → HTML sûr : **mot-clé** en gras, listes, titres
+function md(t) {
+  const h = esc(String(t || '')).replace(/\*\*([^*\n]+?)\*\*/g, '<b>$1</b>');
+  let out = '', list = null; const close = () => { if (list) { out += `</${list}>`; list = null; } };
+  for (const ln of h.split('\n')) {
+    let m;
+    if ((m = ln.match(/^\s*[-*•]\s+(.*)/))) { if (list !== 'ul') { close(); out += '<ul class="rl">'; list = 'ul'; } out += `<li>${m[1]}</li>`; }
+    else if ((m = ln.match(/^\s*(\d+)[.)]\s+(.*)/))) { if (list !== 'ol') { close(); out += '<ol class="rl">'; list = 'ol'; } out += `<li>${m[2]}</li>`; }
+    else if ((m = ln.match(/^\s*#{1,4}\s+(.*)/))) { close(); out += `<p class="aih"><b>${m[1].replace(/<\/?b>/g, '')}</b></p>`; }
+    else if (!ln.trim()) close(); else { close(); out += `<p>${ln}</p>`; }
+  }
+  close(); return out;
 }
-async function askAI(q) {
-  let key = ''; try { key = localStorage.getItem('ksp_ai_key') || ''; } catch { /* */ }
-  if (!key) return null;
-  const prompt = `Tu es KAJIMINYI ASSISTANT, assistant d'une application de gestion de commerce en RDC. Réponds en français, brièvement, UNIQUEMENT à partir des données JSON ci-dessous. N'invente jamais de chiffre : si l'information manque, dis-le.\nDONNÉES: ${aiSummary()}\nQUESTION: ${q}`;
-  const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + encodeURIComponent(key), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }] }) });
-  if (!r.ok) throw new Error('Service IA indisponible (' + r.status + ')');
-  const j = await r.json(); return esc(j.candidates?.[0]?.content?.parts?.[0]?.text || '').replace(/\n/g, '<br>');
+function aiContext() {
+  const [from, to] = rangeFor('month'), ok = S.sales.filter(s => s.status !== 'cancelled' && s.ts >= from && s.ts <= to), ex = S.expenses.filter(e => e.ts >= from && e.ts <= to), R = S.settings.rate, a = {};
+  ok.forEach(s => s.items.forEach(i => { const o = a[i.name] ??= { ca: 0, benefice: 0 }; o.ca += i.price * i.qty; o.benefice += (i.price - i.cost) * i.qty; }));
+  let h = null; try { h = healthData(); } catch { /* */ }
+  const both = v => ({ usd: r00(v), cdf: Math.round(v * R) });
+  return JSON.stringify({
+    commerce: S.settings.shop, utilisateur_role: S.me?.role, pays: 'RDC', devise_principale: S.settings.mainCur, taux_1USD_en_CDF: R, nb_produits: S.products.length, nb_fournisseurs: S.suppliers.length, nb_clients: S.clients.length,
+    mois_en_cours: { nb_ventes: ok.length, chiffre_affaires: both(sum(ok, s => s.total)), cout_des_ventes: both(sum(ok, s => s.cost)), depenses: both(sum(ex, eu)), benefice_net: both(sum(ok, s => s.total - s.cost) - sum(ex, eu)) },
+    sante_commerce: h ? { score_sur_100: h.score, fiable: h.reliable, seuil_rentabilite_mois: h.be == null ? null : both(h.be), evolution_ca_vs_mois_precedent_pct: h.growth == null ? null : r00(h.growth) } : null,
+    top_produits: Object.entries(a).sort((x, y) => y[1].ca - x[1].ca).slice(0, 6).map(([k, v]) => ({ produit: k, ca_usd: r00(v.ca), benefice_usd: r00(v.benefice) })),
+    produits_en_rupture: S.products.filter(p => stockState(p) === 'rupture').map(p => p.name).slice(0, 12), stock_faible: S.products.filter(p => stockState(p) === 'faible').map(p => p.name).slice(0, 12),
+    produits_dormants: h ? h.dormant.map(p => p.name).slice(0, 8) : [], dettes_clients: both(sum(S.clients, c => c.debt || 0)), dettes_fournisseurs: both(sum(S.suppliers, c => c.debt || 0)), tresorerie: both(cashUSD())
+  });
 }
-const SUGG = { sales: ['Comment enregistrer une vente ?', "Quel est mon chiffre d'affaires aujourd'hui ?"], products: ['Comment ajouter un produit ?', 'Vérifie mes données'], purchases: ['Comment enregistrer un crédit fournisseur ?', 'Quels produits dois-je commander ?'], cash: ['Pourquoi ma caisse présente-t-elle un écart ?', 'Quel est le solde de la caisse ?'], expenses: ['Combien ai-je dépensé cette semaine ?', 'Pourquoi ma dépense est-elle bloquée ?'], dashboard: ['Quel produit me rapporte le plus ?', 'Quel est mon bénéfice ce mois ?'], default: ['Quels produits se vendent le plus ?', 'Quels clients ont encore des dettes ?', 'Comment faire un inventaire ?'] };
+const SYS = `Tu es KAJIMINYI ASSISTANT, conseiller en business intégré à l'application de gestion KAJIMINYI STOCK PRO, utilisée en République démocratique du Congo (RDC).
+MISSION : aider l'utilisateur sur tout ce qui concerne le business, le commerce, l'entrepreneuriat, la gestion des petits et des grands commerces, des PME et des entreprises en RDC : idées d'activités, stratégies de vente, achats et approvisionnement, gestion du stock, prix et marges, trésorerie, crédit et dettes, fidélisation, marketing de proximité (WhatsApp, Facebook, bouche-à-oreille), recrutement et gestion des employés, formalisation, croissance, risques, et utilisation de l'application.
+CONTEXTE LOCAL À PRENDRE EN COMPTE : double monnaie CDF/USD et variation du taux de change, Mobile Money (Airtel Money, Orange Money, M-Pesa, Vodacom), importation et fournisseurs de Kinshasa, Lubumbashi, Goma, Kolwezi, etc., coûts de transport et d'électricité, marchés et commerce de détail, vente à crédit informelle, concurrence.
+FORMAT : réponds toujours en français, de façon LONGUE, détaillée et structurée : une courte introduction, plusieurs parties avec titres (## Titre), des listes à puces ou numérotées, des exemples concrets adaptés à la RDC, un plan d'action par étapes, les pièges à éviter, puis une conclusion avec la prochaine action à faire. Mets en **gras** les mots-clés, les noms de produits, les chiffres importants et les actions clés.
+RÈGLES : 1) Pour tout chiffre propre au commerce de l'utilisateur (ventes, stock, dettes, caisse…), utilise UNIQUEMENT les données JSON ci-dessous ; n'invente jamais un chiffre de son commerce et dis-le si l'information manque. 2) Les idées et conseils généraux sont bienvenus, mais ne promets jamais de gains garantis ; donne des ordres de grandeur seulement comme hypothèses clairement signalées. 3) Pour les lois, taxes et démarches (DGI, DGRAD, RCCM, ID national, etc.), reste prudent et invite à vérifier auprès des services officiels, car elles changent. 4) Tu ne modifies aucune donnée ; l'utilisateur fait les actions dans l'application. 5) Si la question concerne l'application, explique les étapes dans les modules (Ventes, Produits, Caisse, etc.).`;
+const httpErr = async r => { let m = ''; try { m = (await r.json())?.error?.message || ''; } catch { /* */ } return { status: r.status, msg: m }; };
+async function listModels(key) {
+  const r = await fetch(`${API}/models?pageSize=200&key=${encodeURIComponent(key)}`); if (!r.ok) { const e = await httpErr(r); throw new Error(aiErrText(e)); }
+  return ((await r.json()).models || []).filter(m => (m.supportedGenerationMethods || []).includes('generateContent') && /gemini/i.test(m.name) && !/(embed|tts|image|live|audio|robotics|computer|aqa|imagen|veo|learnlm|gemma|vision-)/i.test(m.name)).map(m => m.name.replace(/^models\//, ''));
+}
+const gver = id => { const m = id.match(/gemini-(\d+(?:\.\d+)?)/); return m ? parseFloat(m[1]) : 0; };
+// 3.7 d'abord, puis 3.6, puis la plus haute version disponible (flash avant pro, stable avant préversion)
+const rankModels = (ids, pref) => [...new Set(ids)].sort((a, b) => sc(b, pref) - sc(a, pref));
+const sc = (id, pref) => (id === pref ? 1e7 : 0) + (/3\.7/.test(id) ? 5e5 : 0) + (/3\.6/.test(id) ? 4e5 : 0) + gver(id) * 1000 + (/lite/.test(id) ? 5 : /flash/.test(id) ? 30 : /pro/.test(id) ? 20 : 0) - (/preview|exp/.test(id) ? 3 : 0);
+const aiErrText = e => /API key|API_KEY|key not valid/i.test(e.msg) ? 'Clé API invalide : vérifiez-la dans Paramètres → Sons & appareil.' : e.status === 403 ? 'Clé refusée (403) : activez l\'API Generative Language pour cette clé, ou vérifiez ses restrictions.' : e.status === 429 ? 'Quota Gemini atteint : réessayez dans un instant.' : `Service IA indisponible (${e.status}${e.msg ? ' : ' + e.msg.slice(0, 120) : ''})`;
+async function callModel(key, model, contents, withCtx) {
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 70000);
+  try {
+    const r = await fetch(`${API}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ systemInstruction: { parts: [{ text: withCtx ? SYS + '\n\nDONNÉES DU COMMERCE (JSON) :\n' + aiContext() : SYS }] }, contents, generationConfig: { temperature: 0.7, maxOutputTokens: 8192 } }) });
+    if (!r.ok) return { ok: false, ...(await httpErr(r)) };
+    const j = await r.json(), text = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('').trim();
+    if (!text) return { ok: false, status: 0, msg: j.promptFeedback?.blockReason ? 'Question bloquée par le filtre de sécurité de Gemini.' : 'Réponse vide' };
+    return { ok: true, text };
+  } catch (e) { return { ok: false, status: 0, msg: e.name === 'AbortError' ? 'Délai dépassé' : 'Connexion impossible' }; } finally { clearTimeout(t); }
+}
+async function askAI(q, test = false) {
+  const key = ls.get(AI_KEY); if (!key) return null;
+  const contents = test ? [{ role: 'user', parts: [{ text: q }] }] : [...aiHist.slice(-8), { role: 'user', parts: [{ text: q }] }], pref = ls.get(AI_PREF), cached = ls.get(AI_MODEL);
+  const first = [...new Set([pref, cached].filter(Boolean))];
+  const run = async list => { let last = null; for (const m of list) { const r = await callModel(key, m, contents, !test); if (r.ok) { ls.set(AI_MODEL, m); return r.text; } last = r; if (![404, 400].includes(r.status) || /API key|API_KEY|key not valid/i.test(r.msg)) throw new Error(aiErrText(r)); } return last && ![404, 400].includes(last.status) ? (() => { throw new Error(aiErrText(last)); })() : null; };
+  let out = first.length ? await run(first) : null;
+  if (out == null) { out = await run(rankModels(await listModels(key), pref).filter(x => !first.includes(x)).slice(0, 6)); }
+  if (out == null) throw new Error('Aucun modèle Gemini compatible pour cette clé. Indiquez le nom du modèle dans Paramètres → Sons & appareil.');
+  if (!test) { aiHist.push({ role: 'user', parts: [{ text: q }] }, { role: 'model', parts: [{ text: out }] }); aiHist = aiHist.slice(-12); }
+  return out;
+}
+A.aitest = async () => {
+  toast('Test de Gemini en cours…');
+  try { await askAI('Réponds uniquement par le mot OK.', true); toast('Gemini connecté · modèle : ' + ls.get(AI_MODEL)); } catch (e) { toast(e.message, 'err'); }
+  if (S.route === 'settings') views.settings($('#view'));
+};
+const BIZ = /(idee|conseil|strateg|developp|entrepren|lancer|ouvrir|investi|business|commerc|marketing|concurren|augmenter|fidel|negoci|importer|exporter|pme|epargne|financ|rentab|promotion|client|embauch|recrut|croissance|petit|grand|entreprise|activite|projet|comment reussir|ameliorer)/;
+const SUGG = { sales: ['Comment augmenter mes ventes ?', "Idées de promotions pour mon commerce"], products: ['Comment bien fixer mes prix de vente ?', 'Vérifie mes données'], purchases: ['Comment négocier avec mes fournisseurs ?', 'Quels produits dois-je commander ?'], cash: ['Pourquoi ma caisse présente-t-elle un écart ?', 'Comment mieux gérer ma trésorerie ?'], expenses: ['Comment réduire mes dépenses ?', 'Combien ai-je dépensé cette semaine ?'], dashboard: ['Quel produit me rapporte le plus ?', 'Donne-moi des idées pour développer mon business'], default: ['Idées de business rentables en RDC', 'Comment faire grandir mon petit commerce ?', 'Quels clients ont encore des dettes ?'] };
 A.assistant = () => {
   document.querySelector('.bot-wrap')?.close?.();
-  const here = HELP[S.route], sg = SUGG[S.route] || SUGG.default;
-  const w = modal('KAJIMINYI ASSISTANT', `<div class="bot"><div id="botlog" class="botlog"><div class="bmsg bot">Bonjour ${esc((who() || '').split(' ')[0])} ! Je réponds à partir de <b>vos données réelles</b> et ne modifie rien sans votre accord.${here ? ` Vous êtes dans <b>${esc(here[0])}</b> : touchez « Expliquer cette page ».` : ''}</div></div>
-    <div class="chips">${here ? '<button class="chip" data-q="__page">Expliquer cette page</button>' : ''}${sg.map(s => `<button class="chip" data-q="${esc(s)}">${esc(s)}</button>`).join('')}</div>
+  const here = HELP[S.route], sg = SUGG[S.route] || SUGG.default, hasKey = !!ls.get(AI_KEY);
+  const w = modal('KAJIMINYI ASSISTANT', `<div class="bot"><div id="botlog" class="botlog"><div class="bmsg bot">Bonjour <b>${esc((who() || '').split(' ')[0])}</b> ! Je réponds à partir de <b>vos données réelles</b>${hasKey ? ' et je vous conseille sur le <b>business, le commerce et l\'entrepreneuriat en RDC</b>' : ''}, et je ne modifie rien sans votre accord.${here ? ` Vous êtes dans <b>${esc(here[0])}</b> : touchez « Expliquer cette page ».` : ''}${hasKey ? '' : '<br><small>Pour des conseils business détaillés (IA Gemini), ajoutez votre clé dans <a href="#/settings" data-close>Paramètres → Sons & appareil</a>.</small>'}</div></div>
+    <div class="chips">${here ? '<button class="chip" data-q="__page">Expliquer cette page</button>' : ''}${sg.map(x => `<button class="chip" data-q="${esc(x)}">${esc(x)}</button>`).join('')}</div>
     <form class="botin" id="botf"><input name="q" placeholder="Posez votre question…" autocomplete="off"><button class="btn">${ic('send', 18)}</button></form></div>`, { wide: true });
   w.classList.add('bot-wrap'); const log = $('#botlog', w);
   const add = (cls, html) => { const d = document.createElement('div'); d.className = 'bmsg ' + cls; d.innerHTML = html; log.appendChild(d); log.scrollTop = log.scrollHeight; return d; };
   const ask = async q => {
     if (!q.trim()) return; if (q === '__page') { add('me', 'Expliquer cette page'); add('bot', `<b>${esc(here[0])}</b> — ${esc(here[1])}`); return; }
-    add('me', esc(q)); let r = null;
-    try { r = answer(q); } catch (e) { console.error(e); r = 'Je n\'ai pas pu analyser les données pour cette question.'; }
-    if (!r) { const t = add('bot', '…'); try { r = await askAI(q); } catch (e) { r = esc(e.message); } t.remove(); }
-    add('bot', r || "Je n'ai pas trouvé de réponse fiable dans vos données. Essayez : « produits les plus vendus », « combien ai-je dépensé cette semaine ? », « quels clients ont des dettes ? », « vérifie mes données » ou « comment faire un inventaire ? ».");
+    add('me', esc(q)); const key = ls.get(AI_KEY), n = nz(q);
+    let local = null; try { local = answer(q); } catch (e) { console.error(e); }
+    // question de conseil/idées → Gemini d'abord ; question sur les données → réponse exacte locale
+    if (key && (BIZ.test(n) && !(local && /(combien|quel|quels|quelle|solde|dette|depens|ecart|commander|vendu|benefice|verifi)/.test(n)) || !local)) {
+      const t = add('bot', '<i>Réflexion en cours…</i>');
+      try { const r = await askAI(q); t.innerHTML = md(r) + '<p class="muted sm"><small>Réponse générée par IA (Gemini) — vérifiez les informations importantes.</small></p>'; sound('msg'); log.scrollTop = log.scrollHeight; return; }
+      catch (e) { t.innerHTML = esc(e.message) + (local ? '' : ''); if (!local) return; }
+    }
+    add('bot', local || "Je n'ai pas trouvé de réponse fiable dans vos données. Pour des conseils business détaillés, ajoutez votre clé Gemini dans <b>Paramètres → Sons & appareil</b>. Sinon essayez : « produits les plus vendus », « combien ai-je dépensé cette semaine ? », « quels clients ont des dettes ? » ou « vérifie mes données ».");
     sound('msg');
   };
   w.addEventListener('click', e => { const c = e.target.closest('[data-q]'); if (c) ask(c.dataset.q); });
@@ -2372,8 +2440,11 @@ views.settings = el => {
     body = `<form class="card frm" id="nf">${adm ? `${chk('sound', "Sonneries de l'application (messages, erreurs, opérations, alarmes)", s.sound !== false)}<label>Volume<input type="range" name="vol" min="0.1" max="1" step="0.1" value="${s.vol || 1}"></label><button class="btn">Enregistrer</button>` : '<p class="muted sm">Les sons sont réglés par l\'administrateur.</p>'}
       <div class="row"><button type="button" class="btn ghost sm" data-act="sndtest">🔔 Message</button><button type="button" class="btn ghost sm" data-act="sndalarm">🚨 Alarme</button></div></form>
       <div class="card"><h3>Permissions du téléphone</h3><p class="muted sm">Demandées uniquement quand vous testez ou utilisez la fonction.</p><div class="row wrap"><button class="btn ghost sm" data-act="permnotif">Notifications</button><button class="btn ghost sm" data-act="permcam">Appareil photo</button><button class="btn ghost sm" data-act="permgeo">Position</button></div><div id="permres" class="muted sm"></div></div>
-      <div class="card"><h3>Assistant IA (facultatif)</h3><p class="muted sm">Sans clé, l'assistant répond avec vos données locales. Avec une clé Gemini, il peut répondre à plus de questions : seuls des totaux agrégés sont envoyés. La clé reste sur cet appareil uniquement, jamais dans la base.</p>
-      <div class="row"><input id="aikey" type="password" placeholder="${key ? 'Clé enregistrée' : 'Clé API Gemini'}" autocomplete="off"><button class="btn sm" data-act="aisave">Enregistrer</button>${key ? '<button class="btn ghost sm" data-act="aidel">Effacer</button>' : ''}</div></div>`;
+      <div class="card"><h3>Assistant IA Gemini (facultatif)</h3><p class="muted sm">Avec une clé Gemini, l'assistant donne des conseils longs sur le business, le commerce et l'entrepreneuriat en RDC. Le modèle le plus récent (3.7, puis 3.6…) est détecté automatiquement. Seuls des totaux agrégés sont envoyés ; la clé reste sur cet appareil, jamais dans la base.</p>
+      <div class="frm"><label>Clé API Gemini<input id="aikey" type="password" placeholder="${key ? 'Clé enregistrée (laisser vide pour la garder)' : 'Collez votre clé'}" autocomplete="off"></label>
+      <label>Modèle (facultatif — vide = automatique 3.7 → 3.6 → plus récent)<input id="aimodel" placeholder="ex. gemini-3.7-flash" value="${esc((() => { try { return localStorage.getItem('ksp_ai_pref') || ''; } catch { return ''; } })())}"></label>
+      <div class="row wrap"><button type="button" class="btn sm" data-act="aisave">Enregistrer</button><button type="button" class="btn ghost sm" data-act="aitest">Tester la connexion</button>${key ? '<button type="button" class="btn ghost sm" data-act="aidel">Effacer la clé</button>' : ''}</div>
+      <small class="muted">Modèle utilisé : ${esc((() => { try { return localStorage.getItem('ksp_ai_model') || 'pas encore déterminé'; } catch { return '—'; } })())}</small></div></div>`;
   }
   if (tab === 'bak' && adm) body = `<div class="card"><h3>Sauvegarde complète</h3><p class="muted sm">Télécharge toutes les données (produits, ventes, caisse, journal…) en un fichier JSON. Faites-le régulièrement et conservez-le en lieu sûr. Les pièces jointes sont incluses.</p><button class="btn" data-act="backup">${ic('dl', 16)} Télécharger la sauvegarde</button></div>
     <div class="card"><h3>Installation</h3><p class="muted sm">Pour utiliser l'application comme une application native, installez-la depuis le menu du navigateur (« Ajouter à l'écran d'accueil »).</p></div>`;
@@ -2433,8 +2504,8 @@ const pres = t => { const e = $('#permres'); if (e) e.textContent = t; };
 A.permnotif = async () => { try { pres('Notifications : ' + await Notification.requestPermission()); } catch { pres('Non disponible sur cet appareil'); } };
 A.permcam = async () => { try { const st = await navigator.mediaDevices.getUserMedia({ video: true }); st.getTracks().forEach(t => t.stop()); pres('Appareil photo : autorisé'); } catch (e) { pres('Appareil photo : ' + (e.name === 'NotAllowedError' ? 'refusé' : 'indisponible')); } };
 A.permgeo = () => navigator.geolocation ? navigator.geolocation.getCurrentPosition(() => pres('Position : autorisée'), () => pres('Position : refusée ou indisponible')) : pres('Position : indisponible');
-A.aisave = () => { const v = $('#aikey')?.value.trim(); if (!v) return; try { localStorage.setItem('ksp_ai_key', v); toast('Clé enregistrée sur cet appareil'); views.settings($('#view')); } catch { toast('Stockage local indisponible', 'err'); } };
-A.aidel = () => { try { localStorage.removeItem('ksp_ai_key'); } catch { /* */ } views.settings($('#view')); };
+A.aisave = () => { const v = $('#aikey')?.value.trim(), mo = $('#aimodel')?.value.trim(); try { if (v) localStorage.setItem('ksp_ai_key', v); if (mo) localStorage.setItem('ksp_ai_pref', mo); else localStorage.removeItem('ksp_ai_pref'); localStorage.removeItem('ksp_ai_model'); toast('Enregistré sur cet appareil'); views.settings($('#view')); } catch { toast('Stockage local indisponible', 'err'); } };
+A.aidel = () => { try { localStorage.removeItem('ksp_ai_key'); localStorage.removeItem('ksp_ai_model'); } catch { /* */ } views.settings($('#view')); };
 
 }
 {
