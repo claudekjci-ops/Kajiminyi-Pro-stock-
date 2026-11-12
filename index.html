@@ -2334,7 +2334,7 @@ function aiContext() {
 }
 const SYS = `Tu es KAJIMINYI ASSISTANT, conseiller en business intégré à l'application de gestion KAJIMINYI STOCK PRO, utilisée en République démocratique du Congo (RDC).
 MISSION : aider l'utilisateur sur tout ce qui concerne le business, le commerce, l'entrepreneuriat, la gestion des petits et des grands commerces, des PME et des entreprises en RDC : idées d'activités, stratégies de vente, achats et approvisionnement, gestion du stock, prix et marges, trésorerie, crédit et dettes, fidélisation, marketing de proximité (WhatsApp, Facebook, bouche-à-oreille), recrutement et gestion des employés, formalisation, croissance, risques, et utilisation de l'application.
-CONTEXTE LOCAL À PRENDRE EN COMPTE : double monnaie CDF/USD et variation du taux de change, Mobile Money (Airtel Money, Orange Money, M-Pesa, Vodacom), importation et fournisseurs de Kinshasa, Lubumbashi, Goma, Kolwezi, etc., coûts de transport et d'électricité, marchés et commerce de détail, vente à crédit informelle, concurrence.
+CONTEXTE LOCAL À PRENDRE EN COMPTE : double monnaie CDF/USD et variation du taux de change, Mobile Money (Airtel Money, Orange Money, M-Pesa, Vodacom), importation et fournisseurs de Kinshasa, Lubumbashi, Goma, Kolwezi, etc., coûts de transport et d'électricité, marchés et commerce de détail, vente à crédit informelle, concurrence et l'actualité qui concerne la finance, économie et sur le taux du jour mis par la banque centrale.
 FORMAT : réponds toujours en français, de façon LONGUE, détaillée et structurée : une courte introduction, plusieurs parties avec titres (## Titre), des listes à puces ou numérotées, des exemples concrets adaptés à la RDC, un plan d'action par étapes, les pièges à éviter, puis une conclusion avec la prochaine action à faire. Mets en **gras** les mots-clés, les noms de produits, les chiffres importants et les actions clés.
 RÈGLES : 1) Pour tout chiffre propre au commerce de l'utilisateur (ventes, stock, dettes, caisse…), utilise UNIQUEMENT les données JSON ci-dessous ; n'invente jamais un chiffre de son commerce et dis-le si l'information manque. 2) Les idées et conseils généraux sont bienvenus, mais ne promets jamais de gains garantis ; donne des ordres de grandeur seulement comme hypothèses clairement signalées. 3) Pour les lois, taxes et démarches (DGI, DGRAD, RCCM, ID national, etc.), reste prudent et invite à vérifier auprès des services officiels, car elles changent. 4) Tu ne modifies aucune donnée ; l'utilisateur fait les actions dans l'application. 5) Si la question concerne l'application, explique les étapes dans les modules (Ventes, Produits, Caisse, etc.).`;
 const httpErr = async r => { let m = ''; try { m = (await r.json())?.error?.message || ''; } catch { /* */ } return { status: r.status, msg: m }; };
@@ -2346,7 +2346,7 @@ const gver = id => { const m = id.match(/gemini-(\d+(?:\.\d+)?)/); return m ? pa
 // 3.7 d'abord, puis 3.6, puis la plus haute version disponible (flash avant pro, stable avant préversion)
 const rankModels = (ids, pref) => [...new Set(ids)].sort((a, b) => sc(b, pref) - sc(a, pref));
 const sc = (id, pref) => (id === pref ? 1e7 : 0) + (/3\.7/.test(id) ? 5e5 : 0) + (/3\.6/.test(id) ? 4e5 : 0) + gver(id) * 1000 + (/lite/.test(id) ? 5 : /flash/.test(id) ? 30 : /pro/.test(id) ? 20 : 0) - (/preview|exp/.test(id) ? 3 : 0);
-const aiErrText = e => /API key|API_KEY|key not valid/i.test(e.msg) ? 'Clé API invalide : vérifiez-la dans Paramètres → Sons & appareil.' : e.status === 403 ? 'Clé refusée (403) : activez l\'API Generative Language pour cette clé, ou vérifiez ses restrictions.' : e.status === 429 ? 'Quota Gemini atteint : réessayez dans un instant.' : `Service IA indisponible (${e.status}${e.msg ? ' : ' + e.msg.slice(0, 120) : ''})`;
+const aiErrText = e => /API key|API_KEY|key not valid/i.test(e.msg) ? 'Clé API invalide : vérifiez-la dans Paramètres → Sons & appareil.' : e.status === 403 ? 'Clé refusée (403) : activez l\'API Generative Language pour cette clé, ou vérifiez ses restrictions.' : e.status === 429 ? 'Quota Gemini atteint : réessayez dans un instant.' : [500, 503].includes(e.status) ? 'Gemini est surchargé en ce moment : réessayez dans quelques secondes.' : `Service IA indisponible (${e.status}${e.msg ? ' : ' + e.msg.slice(0, 120) : ''})`;
 async function callModel(key, model, contents, withCtx) {
   const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 70000);
   try {
@@ -2362,10 +2362,21 @@ async function askAI(q, test = false) {
   const key = ls.get(AI_KEY); if (!key) return null;
   const contents = test ? [{ role: 'user', parts: [{ text: q }] }] : [...aiHist.slice(-8), { role: 'user', parts: [{ text: q }] }], pref = ls.get(AI_PREF), cached = ls.get(AI_MODEL);
   const first = [...new Set([pref, cached].filter(Boolean))];
-  const run = async list => { let last = null; for (const m of list) { const r = await callModel(key, m, contents, !test); if (r.ok) { ls.set(AI_MODEL, m); return r.text; } last = r; if (![404, 400].includes(r.status) || /API key|API_KEY|key not valid/i.test(r.msg)) throw new Error(aiErrText(r)); } return last && ![404, 400].includes(last.status) ? (() => { throw new Error(aiErrText(last)); })() : null; };
+  let lastErr = null;
+  // essaie les modèles à tour de rôle : un modèle introuvable (404/400) ou surchargé (503/500/429) est simplement sauté
+  const run = async list => {
+    for (const m of list) {
+      let r = await callModel(key, m, contents, !test);
+      if (!r.ok && [500, 503].includes(r.status)) { await new Promise(res => setTimeout(res, 1200)); r = await callModel(key, m, contents, !test); }   // une 2e chance si surcharge passagère
+      if (r.ok) { ls.set(AI_MODEL, m); return r.text; }
+      lastErr = r;
+      if (r.status === 403 || /API key|API_KEY|key not valid/i.test(r.msg)) throw new Error(aiErrText(r));
+    }
+    return null;
+  };
   let out = first.length ? await run(first) : null;
-  if (out == null) { out = await run(rankModels(await listModels(key), pref).filter(x => !first.includes(x)).slice(0, 6)); }
-  if (out == null) throw new Error('Aucun modèle Gemini compatible pour cette clé. Indiquez le nom du modèle dans Paramètres → Sons & appareil.');
+  if (out == null) { let ids = []; try { ids = rankModels(await listModels(key), pref).filter(x => !first.includes(x)); } catch (e) { if (!lastErr) throw e; } out = await run(ids.slice(0, 8)); }
+  if (out == null) throw new Error(lastErr && ![404, 400].includes(lastErr.status) ? aiErrText(lastErr) : 'Aucun modèle Gemini compatible pour cette clé. Indiquez le nom du modèle dans Paramètres → Sons & appareil.');
   if (!test) { aiHist.push({ role: 'user', parts: [{ text: q }] }, { role: 'model', parts: [{ text: out }] }); aiHist = aiHist.slice(-12); }
   return out;
 }
