@@ -270,6 +270,14 @@ html,body{overscroll-behavior:none;-webkit-overflow-scrolling:auto}
 body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 input,textarea,select,[contenteditable]{-webkit-user-select:text;user-select:text}
 
+.fsec{font-weight:700;color:var(--dg);margin:10px 0 0;padding-top:8px;border-top:1px solid var(--bd)}.fsec small{font-weight:400;color:var(--mu)}
+[data-theme=dark] .fsec{color:#7fe0b6}
+.guide-box{background:rgba(0,168,107,.06);border:1px solid var(--bd);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:10px}
+details.adv{border:1px dashed var(--bd);border-radius:12px;padding:8px}details.adv summary{cursor:pointer;font-weight:600}
+.scanbox{position:relative;border-radius:14px;overflow:hidden;background:#000}.scanbox video{width:100%;max-height:48vh;object-fit:cover;display:block}
+.scanline{position:absolute;left:8%;right:8%;top:50%;height:2px;background:#ff3b30;box-shadow:0 0 8px #ff3b30;animation:scan 1.6s ease-in-out infinite alternate}
+@keyframes scan{from{top:25%}to{top:75%}}
+
 </style>
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -377,6 +385,10 @@ const mcur = () => S.settings.mainCur === 'USD' ? 'USD' : 'CDF';
 const money = (n, cur) => nat(cur) === 'CDF' ? cdf(n) : usdx(n);
 const toUSD = (a, cur) => nat(cur) === 'CDF' ? a / S.settings.rate : a;
 const fromUSD = (a, cur) => nat(cur) === 'CDF' ? a * S.settings.rate : a;
+// Taux d'échange propre à un fournisseur (1 USD = ? CDF) ; à défaut, taux général
+const supRate = sup => sup && +sup.rate > 0 ? +sup.rate : S.settings.rate;
+const toUSDs = (a, cur, sup) => nat(cur) === 'CDF' ? a / supRate(sup) : a;
+const fromUSDs = (a, cur, sup) => nat(cur) === 'CDF' ? a * supRate(sup) : a;
 const fmtDate = ts => new Date(ts).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
 const dayKey = (ts = Date.now()) => {
   const d = new Date(ts);
@@ -404,7 +416,7 @@ function fmtQty(p, q = p.qty) {
 function fmtDec(p, q = p.qty) {
   const big = (p.units || []).filter(u => u.factor > 1).sort((a, b) => b.factor - a.factor)[0];
   if (!big) return '';
-  const t = (+(q / big.factor).toFixed(4)).toLocaleString('fr-FR') + ' ' + big.name;
+  const t = (+(q / big.factor).toFixed(4)).toLocaleString('fr-FR', { maximumFractionDigits: 4 }) + ' ' + big.name;
   return t === fmtQty(p, q) ? '' : t;   // pas de doublon (ex. « 10 Carton ≈ 10 Carton »)
 }
 const fnum = (n, d = 2) => (+n || 0).toLocaleString('fr-FR', { maximumFractionDigits: d });
@@ -734,6 +746,50 @@ document.addEventListener('input', e => {
   $$(t.dataset.filter + ' [data-s]').forEach(r => { r.hidden = !r.dataset.s.includes(q); });
 });
 
+
+/* ---------- code-barres : recherche tolérante + scanner ---------- */
+function findByCode(code) {
+  const c = String(code || '').trim().toLowerCase(); if (!c) return null;
+  const n = c.replace(/^0+/, '');
+  return S.products.find(p => (p.barcode && String(p.barcode).trim().toLowerCase() === c) || (p.code && String(p.code).trim().toLowerCase() === c))
+    || (/^\d+$/.test(c) ? S.products.find(p => p.barcode && /^\d+$/.test(String(p.barcode).trim()) && String(p.barcode).trim().replace(/^0+/, '') === n) : null) || null;
+}
+let zxP;
+const loadZX = () => zxP ??= new Promise((ok, ko) => { if (window.ZXing) return ok(); const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js'; sc.onload = ok; sc.onerror = () => { zxP = null; ko(new Error('zxing')); }; document.head.appendChild(sc); });
+// Scanner : BarcodeDetector (formats explicites, HD, mise au point continue, lampe) ou ZXing en secours ; saisie manuelle toujours possible
+async function scanCode(onCode, { continuous = false, title = 'Scanner un code-barres' } = {}) {
+  const w = modal(title, `<div class="scanbox"><video id="scv" playsinline muted autoplay></video><i class="scanline"></i></div>
+    <div class="row sp" style="margin-top:8px"><button type="button" class="btn ghost sm" id="sctorch" hidden>🔦 Lampe</button><span id="scmsg" class="muted sm">Placez le code dans le cadre</span></div>
+    <form class="row" id="scman" style="margin-top:8px;flex-wrap:nowrap"><input name="c" placeholder="Ou saisissez le code" inputmode="numeric" autocomplete="off" style="flex:1;min-width:0"><button class="btn sm">OK</button></form>`);
+  let stream, on = true, last = '', lastT = 0, zr = null;
+  const stop = () => { on = false; try { zr?.reset(); } catch { /* */ } stream?.getTracks().forEach(t => t.stop()); };
+  const msg = t => { const m = $('#scmsg', w); if (m) m.textContent = t; };
+  const got = code => {
+    code = String(code || '').trim(); if (!code) return; const t = Date.now(); if (code === last && t - lastT < 1800) return; last = code; lastT = t;
+    sound('ok'); const r = onCode(code); if (!continuous && r !== false) { stop(); w.close(); } else msg('Dernier code : ' + code);
+  };
+  w.addEventListener('click', e => { if (e.target === w || e.target.closest('[data-close]')) stop(); });
+  $('#scman', w).addEventListener('submit', e => { e.preventDefault(); got(e.target.c.value); e.target.c.value = ''; });
+  try {
+    const v = $('#scv', w);
+    if ('BarcodeDetector' in window) {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } } });
+      const tr = stream.getVideoTracks()[0], caps = tr.getCapabilities?.() || {};
+      try { if (caps.focusMode?.includes('continuous')) await tr.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }); } catch { /* */ }
+      if (caps.torch) { const tb = $('#sctorch', w); tb.hidden = false; let lit = false; tb.onclick = async () => { lit = !lit; try { await tr.applyConstraints({ advanced: [{ torch: lit }] }); } catch { /* */ } }; }
+      v.srcObject = stream; await v.play();
+      let fm; try { const sup = await BarcodeDetector.getSupportedFormats(); fm = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'code_93', 'itf', 'codabar', 'qr_code', 'data_matrix'].filter(x => sup.includes(x)); } catch { /* */ }
+      const det = new BarcodeDetector(fm?.length ? { formats: fm } : undefined);
+      while (on) { const r = await det.detect(v).catch(() => []); if (r.length) got(r[0].rawValue); await new Promise(r => setTimeout(r, 120)); }
+    } else {
+      msg('Chargement du lecteur…'); await loadZX();
+      zr = new ZXing.BrowserMultiFormatReader();
+      await zr.decodeFromConstraints({ video: { facingMode: { ideal: 'environment' } } }, v, res => { if (res && on) got(res.getText()); });
+      msg('Placez le code dans le cadre');
+    }
+  } catch { msg('Caméra indisponible ou refusée : saisissez le code ci-dessous'); }
+}
+
 {
 // Vues : tableau de bord + ventes (v2 : devise principale CDF, paiements multiples, crédit avec échéance)
 
@@ -863,7 +919,7 @@ views.sales = el => {
     return;
   }
   const L0 = cartLines(), tot = totals(L0).total;
-  el.innerHTML = page('Vente', `${'BarcodeDetector' in window ? `<button class="btn ghost sm" data-act="scan">${ic('scan', 16)} Scanner</button>` : ''}`, `${tabs}
+  el.innerHTML = page('Vente', `<button class="btn ghost sm" data-act="scan">${ic('scan', 16)} Scanner</button>`, `${tabs}
     <label class="sbox">${ic('search', 18)}<input id="sq" placeholder="Rechercher un produit ou scanner un code-barres…" value="${esc(sq)}" autocomplete="off"></label>
     <div class="chips"><button class="chip ${!scat ? 'on' : ''}" data-act="scat" data-c="">Tout</button>${S.categories.map(c => `<button class="chip ${scat === c.id ? 'on' : ''}" data-act="scat" data-c="${c.id}">${esc(c.icon || '')} ${esc(c.name)}</button>`).join('')}</div>
     <div class="plist" id="pgrid">${S.products.map(p => { const blocked = !sellable(p), st = stockState(p);
@@ -879,8 +935,7 @@ function applyGrid() {
 document.addEventListener('input', e => { if (e.target.id === 'sq') { sq = e.target.value; applyGrid(); } });
 document.addEventListener('keydown', e => {
   if (e.target.id === 'sq' && e.key === 'Enter') {
-    const q = e.target.value.trim().toLowerCase();
-    const p = S.products.find(x => (x.barcode && x.barcode.toLowerCase() === q) || (x.code && x.code.toLowerCase() === q));
+    const p = findByCode(e.target.value);
     if (p) { A.addcart({ id: p.id }); e.target.value = ''; sq = ''; applyGrid(); }
   }
 });
@@ -898,26 +953,11 @@ A.addcart = d => {
   views.sales($('#view'));
 };
 A.opencart = () => openCart();
-A.scan = async () => {
-  const w = modal('Scanner un code-barres', '<video id="sv" playsinline muted style="width:100%;border-radius:12px;background:#000"></video><p class="muted sm">Pointez la caméra vers le code-barres (autorisation demandée à l\'instant).</p>');
-  let stream, on = true;
-  const stop = () => { on = false; stream?.getTracks().forEach(t => t.stop()); };
-  w.addEventListener('click', e => { if (e.target === w || e.target.closest('[data-close]')) stop(); });
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-    const v = $('#sv', w); v.srcObject = stream; await v.play();
-    const det = new BarcodeDetector();
-    while (on) {
-      const r = await det.detect(v).catch(() => []);
-      if (r.length) {
-        const code = r[0].rawValue, p = S.products.find(x => x.barcode === code || x.code === code);
-        if (p) { stop(); w.close(); A.addcart({ id: p.id }); return; }
-        toast('Code ' + code + ' inconnu', 'err');
-      }
-      await new Promise(r => setTimeout(r, 400));
-    }
-  } catch { stop(); w.close(); toast("Caméra non autorisée ou indisponible", 'err'); }
-};
+A.scan = () => scanCode(code => {
+  const p = findByCode(code);
+  if (p) { A.addcart({ id: p.id }); return true; }
+  toast('Code ' + code + ' inconnu', 'err'); return false;
+}, { title: 'Scanner un code-barres' });
 
 function openCart() {
   const w = modal('Panier', '<div id="cartbody"></div>', { wide: true });
@@ -1078,67 +1118,91 @@ A.pform = d => {
   if (!S.categories.length) return toast("Créez d'abord une catégorie", 'err');
   const mc = mcur(), p = d.id ? S.products.find(x => x.id === d.id) : { unit: 'Pièce', units: [], min: 5, cat: S.categories[0]?.id, buyCur: mc, sellCur: mc };
   const bc = p.buyCur || 'USD', sc = p.sellCur || 'USD';
+  const units = (p.units || []).filter(u => u.factor > 1), big = [...units].sort((a, b) => b.factor - a.factor)[0] || null, extras = units.filter(u => u !== big);
   form(d.id ? 'Modifier le produit' : 'Nouveau produit', `
     <datalist id="unames">${UNIT_NAMES.map(u => `<option>${u}</option>`).join('')}</datalist>
+    <div class="fsec">1 · Identification</div>
     <div class="row"><img id="pprev" src="${p.photo || ''}" style="width:64px;height:64px;border-radius:12px;object-fit:cover;background:#eee;${p.photo ? '' : 'display:none'}"><label style="flex:1">Photo (appareil photo ou galerie)<input type="file" id="pfile" accept="image/*"></label></div>
     <input type="hidden" id="pphoto">
     ${d.id ? `<p class="muted sm">ID technique : ${esc(p.id)} · Enregistré le ${p.ts ? fmtDate(p.ts) : '—'}${p.createdBy ? ' par ' + esc(p.createdBy) : ''}</p>` : '<p class="muted sm">La date d\'enregistrement et l\'identifiant technique sont créés automatiquement.</p>'}
     ${fld('Nom du produit', 'name', p.name || '', 'text', 'required')}
-    <div class="two">${fld('Identifiant produit (code)', 'code', p.code || '', 'text', 'placeholder="Auto si vide"')}<label>Code-barres<span class="row" style="flex-wrap:nowrap"><input name="barcode" value="${esc(p.barcode || '')}" inputmode="numeric" placeholder="Scanner ou saisir" style="flex:1;min-width:0">${'BarcodeDetector' in window ? `<button type="button" class="btn ghost sm" data-act="pscan" aria-label="Scanner">${ic('scan', 18)}</button>` : ''}</span></label></div>
-    ${'BarcodeDetector' in window ? '' : '<p class="muted sm">Scan caméra indisponible sur ce navigateur : saisissez le code ou utilisez un lecteur (Bluetooth/USB) qui tape le code dans le champ.</p>'}
+    <div class="two">${fld('Identifiant produit (code)', 'code', p.code || '', 'text', 'placeholder="Auto si vide"')}<label>Code-barres<span class="row" style="flex-wrap:nowrap"><input name="barcode" value="${esc(p.barcode || '')}" inputmode="numeric" placeholder="Scanner ou saisir" style="flex:1;min-width:0"><button type="button" class="btn ghost sm" data-act="pscan" aria-label="Scanner">${ic('scan', 18)}</button></span></label></div>
     <div class="two">${sel('Catégorie', 'cat', S.categories.map(c => [c.id, c.name]), p.cat)}${fld('Marque', 'brand', p.brand || '')}</div>
     <label>Qualité<input name="quality" list="qlist" value="${esc(p.quality || '')}" placeholder="Premium, Standard, Économique…"><datalist id="qlist"><option>Premium</option><option>Standard</option><option>Économique</option><option>Importé</option><option>Local</option></datalist></label>
     ${sel('Fournisseur', 'supplierId', [['', '— Aucun —'], ...S.suppliers.map(s => [s.id, s.name])], p.supplierId || '')}
     <label>Description<textarea name="desc" rows="2">${esc(p.desc || '')}</textarea></label>
-    <div class="two">${fld("Prix d'achat", 'buyAmt', p.buyAmt ?? p.buy ?? '', 'number', 'required min="0"')}${sel("Devise d'achat", 'buyCur', CURS, bc)}</div>
-    <div class="two">${fld('Prix de vente', 'sellAmt', p.sellAmt ?? p.sell ?? '', 'number', 'required min="0"')}${sel('Devise de vente', 'sellCur', CURS, sc)}</div>
-    <div class="two">${sel('Unité de base (la plus petite)', 'unit', UNIT_NAMES, p.unit)}${fld('Stock minimum (unité de base)', 'min', p.min ?? 5, 'number', 'min="0"')}</div>
-    ${d.id ? `<p class="muted sm">Quantité actuelle : <b>${fmtQty(p)}</b>${fmtDec(p) ? ' (≈ ' + fmtDec(p) + ')' : ''}</p>` : ''}
-    <div class="two">${fld(d.id ? 'Corriger la quantité (vide = inchangée)' : 'Quantité initiale', 'qty', d.id ? '' : 0, 'number', 'min="0"')}<label>Exprimée en<select name="qunit" id="qunit"></select></label></div>
+    <div class="fsec">2 · Prix <small>(toujours pour UNE seule pièce)</small></div>
+    <div class="two">${fld("Prix d'achat d'une pièce", 'buyAmt', p.buyAmt ?? p.buy ?? '', 'number', 'required min="0"')}${sel("Devise d'achat", 'buyCur', CURS, bc)}</div>
+    <div class="two">${fld("Prix de vente d'une pièce", 'sellAmt', p.sellAmt ?? p.sell ?? '', 'number', 'required min="0"')}${sel('Devise de vente', 'sellCur', CURS, sc)}</div>
+    <div class="fsec">3 · Emballage et stock</div>
+    <div class="guide-box">
+      <label>La pièce (la plus petite unité vendue)<select name="unit">${[...new Set([p.unit, ...UNIT_NAMES])].map(u => `<option ${u === p.unit ? 'selected' : ''}>${u}</option>`).join('')}</select></label>
+      <div class="two">${`<label>Grand emballage (facultatif)<input name="bigName" list="unames" value="${esc(big?.name || '')}" placeholder="Carton, Sac, Casier…"></label>`}${fld('Nombre de pièces dans 1 grand emballage', 'bigF', big?.factor || '', 'number', 'min="2" step="any" placeholder="ex. 12"')}</div>
+      ${d.id ? `<p class="muted sm">Stock actuel : <b>${fmtQty(p)}</b>${fmtDec(p) ? ' (≈ ' + fmtDec(p) + ')' : ''}. Pour le corriger, remplissez les deux cases ci-dessous (laissez vide pour ne rien changer).</p>` : '<p class="muted sm">Stock de départ :</p>'}
+      <div class="two">${fld('Nombre de grands emballages', 'bigQty', '', 'number', 'min="0" step="any" placeholder="ex. 10"')}${fld('+ pièces en plus (hors emballage)', 'pcsQty', '', 'number', 'min="0" step="any" placeholder="ex. 0"')}</div>
+      ${fld('Alerte : stock minimum (en pièces)', 'min', p.min ?? 5, 'number', 'min="0"')}
+      <div id="pvw" class="hint"></div>
+    </div>
+    <details class="adv"><summary>Prix du grand emballage et autres emballages (facultatif)</summary>
+      <div class="two">${fld('Prix de vente du grand emballage', 'bigS', big?.priceAmt || '', 'number', 'min="0" placeholder="sinon : prix pièce × nombre"')}${fld("Prix d'achat du grand emballage", 'bigB', big?.buyAmt || '', 'number', 'min="0" placeholder="sinon : prix pièce × nombre"')}</div>
+      <p class="muted sm">Autres emballages (ex. « Palette » contient 120 pièces) :</p>
+      <div id="urows">${extras.map(u => urow(u, p)).join('')}</div><button type="button" class="btn ghost sm" data-act="addurow">${ic('plus', 16)} Ajouter un emballage</button>
+    </details>
+    <div class="fsec">4 · Dates</div>
     <div class="two">${fld('Date de fabrication (facultatif)', 'mfg', p.mfg || '', 'date')}${fld("Date d'expiration", 'exp', p.exp || '', 'date')}</div>
-    <label class="chk"><input type="checkbox" name="suspended" ${p.suspended ? 'checked' : ''}> Suspendre la vente de ce produit</label>
-    <div class="hint"><b>Conversions d'unités</b> — ex. unité de base « Bouteille », puis « Carton » contient 12. Le stock est tenu en unité de base : vendre 1 bouteille laisse 11 bouteilles (≈ 0,9167 carton). Les prix par conditionnement sont facultatifs (sinon prix de base × quantité contenue).</div>
-    <div id="urows">${(p.units || []).map(u => urow(u, p)).join('')}</div><button type="button" class="btn ghost sm" data-act="addurow">${ic('plus', 16)} Ajouter une unité de conversion</button>`,
+    <label class="chk"><input type="checkbox" name="suspended" ${p.suspended ? 'checked' : ''}> Suspendre la vente de ce produit</label>`,
     async (v, w, f) => {
       const name = v.name.trim(); if (!name) throw new Error('Nom requis');
       const code = (v.code || '').trim() || 'P' + String(S.products.length + 1).padStart(4, '0');
       if (S.products.some(x => x.id !== d.id && x.code && x.code.toLowerCase() === code.toLowerCase())) throw new Error('Ce code produit existe déjà');
-      if (v.mfg && v.exp && v.exp < v.mfg) throw new Error("La date d'expiration précède la date de fabrication");
-      const units = [...f.querySelectorAll('.urow')].map(r => {
-        const pa = num(r.querySelector('.u-s').value), ba = num(r.querySelector('.u-b').value);
-        return { name: r.querySelector('.u-n').value.trim(), factor: num(r.querySelector('.u-f').value), priceAmt: pa, price: r2(toUSD(pa, v.sellCur)), buyAmt: ba, buy: r2(toUSD(ba, v.buyCur)) };
-      }).filter(u => u.name && u.factor > 0 && u.name !== v.unit);
       const bcode = v.barcode.trim();
       if (bcode && S.products.some(x => x.id !== d.id && x.barcode === bcode)) throw new Error('Ce code-barres est déjà utilisé par un autre produit');
-      const qf = v.qunit === v.unit ? 1 : (units.find(u => u.name === v.qunit)?.factor || 1);
-      const qtyBase = v.qty === '' ? null : r2(num(v.qty) * qf);
+      if (v.mfg && v.exp && v.exp < v.mfg) throw new Error("La date d'expiration précède la date de fabrication");
+      const bn = v.bigName.trim(), bf = num(v.bigF);
+      if (bn && !(bf > 1)) throw new Error(`Indiquez combien de pièces contient 1 ${bn} (au moins 2)`);
+      if (!bn && v.bigQty !== '') throw new Error("Renseignez d'abord le grand emballage (nom et nombre de pièces)");
+      const units = [];
+      if (bn && bf > 1) { const pa = num(v.bigS), ba = num(v.bigB); units.push({ name: bn, factor: bf, priceAmt: pa, price: r2(toUSD(pa, v.sellCur)), buyAmt: ba, buy: r2(toUSD(ba, v.buyCur)) }); }
+      [...f.querySelectorAll('.urow')].forEach(r => {
+        const pa = num(r.querySelector('.u-s').value), ba = num(r.querySelector('.u-b').value);
+        units.push({ name: r.querySelector('.u-n').value.trim(), factor: num(r.querySelector('.u-f').value), priceAmt: pa, price: r2(toUSD(pa, v.sellCur)), buyAmt: ba, buy: r2(toUSD(ba, v.buyCur)) });
+      });
+      const seen = new Set(), U = units.filter(u => u.name && u.factor > 0 && u.name !== v.unit && !seen.has(u.name.toLowerCase()) && seen.add(u.name.toLowerCase()));
+      const qtyBase = v.bigQty === '' && v.pcsQty === '' ? null : r2(num(v.bigQty) * (bf > 1 ? bf : 0) + num(v.pcsQty));
       const photo = $('#pphoto').value || p.photo || '';
       const data = {
         name, code, barcode: bcode, cat: v.cat, brand: v.brand.trim(), quality: v.quality.trim(), supplierId: v.supplierId, desc: v.desc, photo,
         buyAmt: num(v.buyAmt), buyCur: v.buyCur, buy: r2(toUSD(num(v.buyAmt), v.buyCur)), sellAmt: num(v.sellAmt), sellCur: v.sellCur, sell: r2(toUSD(num(v.sellAmt), v.sellCur)),
-        min: num(v.min), unit: v.unit, units, mfg: v.mfg || '', exp: v.exp || '', suspended: !!v.suspended, updated: Date.now(), updatedBy: who()
+        min: num(v.min), unit: v.unit, units: U, mfg: v.mfg || '', exp: v.exp || '', suspended: !!v.suspended, updated: Date.now(), updatedBy: who()
       };
       const b = batch();
       if (d.id) {
-        const diff = []; [['name', 'nom'], ['buyAmt', 'prix achat'], ['sellAmt', 'prix vente'], ['min', 'stock min'], ['cat', 'catégorie'], ['unit', 'unité'], ['exp', 'expiration'], ['suspended', 'vente suspendue']].forEach(([k, l]) => { if (String(p[k] ?? '') !== String(data[k] ?? '')) diff.push(`${l}: ${p[k] ?? '—'} → ${data[k] || '—'}`); });
+        const diff = []; [['name', 'nom'], ['buyAmt', 'prix achat'], ['sellAmt', 'prix vente'], ['min', 'stock min'], ['cat', 'catégorie'], ['unit', 'unité'], ['exp', 'expiration'], ['suspended', 'vente suspendue'], ['barcode', 'code-barres']].forEach(([k, l]) => { if (String(p[k] ?? '') !== String(data[k] ?? '')) diff.push(`${l}: ${p[k] ?? '—'} → ${data[k] ?? '—'}`); });
         let qtyNote = '';
-        if (qtyBase != null && Math.abs(qtyBase - p.qty) > 1e-9) { data.qty = qtyBase; qtyNote = ` ; quantité: ${fmtQty(p)} → ${fmtQty(p, qtyBase)}`; }
+        if (qtyBase != null && Math.abs(qtyBase - p.qty) > 1e-9) { data.qty = qtyBase; qtyNote = ` ; quantité: ${fmtQty(p)} → ${fmtQty({ unit: v.unit, units: U }, qtyBase)}`; }
         b.merge('products', d.id, data); jr(b, 'Modification produit', `${name} ${diff.join(' ; ') || '(détails)'}${qtyNote}`, null, '', catName(data.cat), d.id);
       } else {
         const id = uid(), qty = qtyBase || 0;
         b.set('products', id, { id, ...data, qty, ts: Date.now(), createdBy: who() });
-        jr(b, 'Produit créé', `${name} (${code})${qty ? ' — stock initial ' + qty + ' ' + v.unit : ''}`, qty || null, '', catName(data.cat), id);
+        jr(b, 'Produit créé', `${name} (${code})${qty ? ' — stock initial ' + fmtQty({ unit: v.unit, units: U }, qty) : ''}`, qty || null, '', catName(data.cat), id);
       }
       b.commit(); toast('Produit enregistré');
-      if (d.id && data.qty != null) askJustif('product', d.id, `Correction de la quantité de « ${name} » : ${fmtQty(p)} → ${fmtQty(p, data.qty)}`);
+      if (d.id && data.qty != null) askJustif('product', d.id, `Correction de la quantité de « ${name} » : ${fmtQty(p)} → ${fmtQty({ unit: v.unit, units: U }, data.qty)}`);
     }, {
       onOpen: (w, f) => {
-        const fill = () => { const q = $('#qunit', f), cur = q.value, base = f.unit.value, names = [...new Set([base, ...[...f.querySelectorAll('.u-n')].map(i => i.value.trim()).filter(Boolean)])]; q.innerHTML = names.map(n => `<option ${n === (cur || base) ? 'selected' : ''}>${esc(n)}</option>`).join(''); };
-        fill(); f.addEventListener('input', fill); f.addEventListener('change', fill); f.addEventListener('click', () => setTimeout(fill, 0));
+        f.dataset.pid = d.id || '';
         $('#pfile', w).addEventListener('change', async e => {
           const file = e.target.files[0]; if (!file) return;
           const url = await resizeImage(file); $('#pphoto').value = url; const im = $('#pprev'); im.src = url; im.style.display = '';
         });
+        const prev = () => {
+          const unit = f.unit.value, bn = f.bigName.value.trim(), bf = num(f.bigF.value), el = $('#pvw', f), hasQ = f.bigQty.value !== '' || f.pcsQty.value !== '';
+          if (!bn || !(bf > 1)) { el.innerHTML = `Vous comptez uniquement en <b>${esc(unit)}</b>.${f.pcsQty.value !== '' ? ` Stock : <b>${num(f.pcsQty.value)} ${esc(unit)}</b>.` : ''}<br><small>Pour compter aussi en cartons/sacs…, renseignez « Grand emballage » et le nombre de pièces.</small>`; return; }
+          const P = { unit, units: [{ name: bn, factor: bf }] }, base = num(f.bigQty.value) * bf + num(f.pcsQty.value), ex = hasQ ? base : 10 * bf;
+          el.innerHTML = `1 ${esc(bn)} = <b>${bf} ${esc(unit)}</b>.<br>${hasQ ? 'Stock saisi' : 'Exemple : 10 ' + esc(bn)} = <b>${fmtQty(P, ex)}</b> = ${+ex.toFixed(4)} ${esc(unit)}.` +
+            (ex >= 1 ? `<br>Après la vente d'1 ${esc(unit)} : <b>${fmtQty(P, ex - 1)}</b>${fmtDec(P, ex - 1) ? ' (≈ ' + fmtDec(P, ex - 1) + ')' : ''}.` : '');
+        };
+        prev(); f.addEventListener('input', prev); f.addEventListener('change', prev);
       }
     });
 };
@@ -1244,20 +1308,12 @@ A.invview = d => {
 };
 
 // Scan du code-barres directement dans la fiche produit
-A.pscan = async () => {
-  const w = modal('Scanner le code-barres', '<video id="psv" playsinline muted style="width:100%;border-radius:12px;background:#000"></video><p class="muted sm">Pointez la caméra vers le code-barres du produit.</p>');
-  let stream, on = true; const stop = () => { on = false; stream?.getTracks().forEach(t => t.stop()); };
-  w.addEventListener('click', e => { if (e.target === w || e.target.closest('[data-close]')) stop(); });
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-    const v = $('#psv', w); v.srcObject = stream; await v.play(); const det = new BarcodeDetector();
-    while (on) {
-      const r = await det.detect(v).catch(() => []);
-      if (r.length) { const code = r[0].rawValue, inp = document.querySelector('.modal-wrap form input[name=barcode]'); stop(); w.close(); if (inp) { inp.value = code; inp.dispatchEvent(new Event('input', { bubbles: true })); } toast('Code lu : ' + code); return; }
-      await new Promise(r => setTimeout(r, 300));
-    }
-  } catch { stop(); w.close(); toast('Caméra non autorisée ou indisponible', 'err'); }
-};
+A.pscan = () => scanCode(code => {
+  const inp = document.querySelector('.modal-wrap form input[name=barcode]');
+  const other = S.products.find(x => x.barcode === code && x.id !== (document.querySelector('.modal-wrap form')?.dataset.pid || ''));
+  if (inp) { inp.value = code; inp.dispatchEvent(new Event('input', { bubbles: true })); }
+  toast(other ? 'Code lu : ' + code + ' (déjà utilisé par ' + other.name + ')' : 'Code lu : ' + code, other ? 'err' : 'ok');
+}, { title: 'Scanner le code-barres du produit' });
 
 }
 {
@@ -1303,20 +1359,22 @@ A.newpurchase = () => {
     <div class="totbox"><div class="row sp"><span>TOTAL</span><b id="ptot" class="big">0</b></div><div class="muted sm" id="ptot2"></div></div>`,
     async (v, w, f) => {
       const L = readLines(f).filter(l => l.qty > 0); if (!L.length) throw new Error('Ajoutez au moins un produit avec une quantité');
-      const supplier = S.suppliers.find(s => s.id === v.supplier), pc = v.pcur, T = x => toUSD(x, pc);
+      const supplier = S.suppliers.find(s => s.id === v.supplier), pc = v.pcur, T = x => toUSDs(x, pc, supplier);
       if (v.payType === 'credit' && !supplier) throw new Error('Choisissez un fournisseur pour un achat à crédit');
       if (v.payType === 'cash' && !v.acc) throw new Error('Aucun mode de paiement disponible : activez-en un dans les paramètres');
       const transportN = num(v.transport), itemsN = sum(L, l => l.qty * l.cost), totalN = itemsN + transportN;
       const itemsTotal = r2(T(itemsN)), transport = r2(T(transportN)), total = r2(itemsTotal + transport);
       const id = uid(), ts = dateTs(v.date), proof = await readAttach($('#pjust', w).files[0]);
       const items = L.map(l => ({ pid: l.p.id, name: l.p.name, unit: l.u.name, factor: l.u.factor, qty: l.qty, cost: r2(l.cost), costUSD: r2(T(l.cost)) }));
-      const payAmt = v.payType === 'cash' ? (nat(v.acc) === pc ? totalN : fromUSD(total, v.acc)) : 0;
+      const payAmt = v.payType === 'cash' ? (nat(v.acc) === pc ? totalN : fromUSDs(total, v.acc, supplier)) : 0;
       const b = batch();
       b.set('purchases', id, { id, ts, day: dayKey(ts), supplierId: supplier?.id || '', supplierName: supplier?.name || '', items, itemsTotal, transport, total, itemsTotalN: r2(itemsN), transportN: r2(transportN), totalN: r2(totalN), pcur: pc,
-        rate: S.settings.rate, rateDate: S.settings.rateDate || '', payType: v.payType, acc: v.payType === 'cash' ? v.acc : '', cur: v.payType === 'cash' ? nat(v.acc) : '', due: v.payType === 'credit' ? v.due : '', note: v.note, proof, uid: S.user.uid, userName: who() });
+        rate: supRate(supplier), rateDate: (+supplier?.rate > 0 ? supplier.rateDate : S.settings.rateDate) || '', supplierRate: +supplier?.rate > 0, payType: v.payType, acc: v.payType === 'cash' ? v.acc : '', cur: v.payType === 'cash' ? nat(v.acc) : '', due: v.payType === 'credit' ? v.due : '', note: v.note, proof, uid: S.user.uid, userName: who() });
       L.forEach(l => {
-        const base = l.qty * l.u.factor, share = itemsN > 0 ? (l.qty * l.cost) / itemsN : 0, landed = base > 0 ? (T(l.qty * l.cost) + transport * share) / base : l.p.buy;
-        b.upd('products', l.p.id, { qty: inc(base), buy: r2(landed), buyAmt: r2(fromUSD(landed, l.p.buyCur || 'USD')), updated: ts, updatedBy: who() });
+        const base = l.qty * l.u.factor, share = itemsN > 0 ? (l.qty * l.cost) / itemsN : 0, landed = base > 0 ? (T(l.qty * l.cost) + transport * share) / base : l.p.buy, bcur = l.p.buyCur || 'USD';
+        // prix d'achat unitaire dans la devise propre du produit (taux du fournisseur si conversion nécessaire)
+        const buyAmt = base > 0 && nat(bcur) === nat(pc) ? r2((l.qty * l.cost + transportN * share) / base) : r2(fromUSDs(landed, bcur, supplier));
+        b.upd('products', l.p.id, { qty: inc(base), buy: r2(toUSD(buyAmt, bcur)), buyAmt, updated: ts, updatedBy: who() });
       });
       if (v.payType === 'cash') cashop(b, 'purchase', v.acc, -payAmt, 'Achat stock ' + (supplier?.name || ''), id, ts);
       else b.upd('suppliers', supplier.id, { debt: inc(total), bought: inc(total), last: ts });
@@ -1331,19 +1389,20 @@ A.newpurchase = () => {
         const calc = () => {
           const L = readLines(f); L.forEach(l => { l.row.querySelector('.pl-s').textContent = money(l.qty * l.cost, pcur()); });
           const tN = sum(L, l => l.qty * l.cost) + num(f.transport.value);
-          $('#ptot', w).textContent = money(tN, pcur()); $('#ptot2', w).textContent = '≈ ' + usd(toUSD(tN, pcur())) + ' · taux 1 $ = ' + S.settings.rate.toLocaleString('fr-FR') + ' FC';
+          $('#ptot', w).textContent = money(tN, pcur()); const sup = S.suppliers.find(x => x.id === f.supplier.value);
+          $('#ptot2', w).textContent = '≈ ' + usdx(toUSDs(tN, pcur(), sup)) + ' · taux ' + (+sup?.rate > 0 ? 'du fournisseur' : 'général') + ' : 1 $ = ' + supRate(sup).toLocaleString('fr-FR') + ' FC';
           $('#accl', w).style.display = f.payType.value === 'cash' ? '' : 'none'; $('#duel', w).style.display = f.payType.value === 'credit' ? '' : 'none';
         };
         const setPrice = r => {
           const p = S.products.find(x => x.id === r.querySelector('.pl-p').value), u = p && allUnits(p).find(x => x.name === r.querySelector('.pl-u').value);
-          if (u) r.querySelector('.pl-c').value = r2(fromUSD(u.buy > 0 ? u.buy : p.buy * u.factor, pcur()));
+          if (u) r.querySelector('.pl-c').value = r2(fromUSDs(u.buy > 0 ? u.buy : p.buy * u.factor, pcur(), S.suppliers.find(x => x.id === f.supplier.value)));
         };
         f.addEventListener('change', e => {
           if (e.target.classList.contains('pl-p')) {
             const r = e.target.closest('.pl'), p = S.products.find(x => x.id === e.target.value);
             r.querySelector('.pl-u').innerHTML = (p ? allUnits(p) : []).map(u => `<option>${esc(u.name)}</option>`).join(''); setPrice(r);
           } else if (e.target.classList.contains('pl-u')) setPrice(e.target.closest('.pl'));
-          else if (e.target.name === 'pcur') $$('.pl', f).forEach(setPrice);
+          else if (e.target.name === 'pcur' || e.target.name === 'supplier') $$('.pl', f).forEach(setPrice);
           else if (e.target.name === 'payType') { /* affichage mis à jour par calc */ }
           calc();
         });
@@ -1528,6 +1587,7 @@ A.partform = d => {
     <b class="sm">Catégories fournies</b><div class="chkgrid">${S.categories.map(c => `<label class="chk"><input type="checkbox" data-cat="${c.id}" ${sel_.includes(c.id) ? 'checked' : ''}> ${esc(c.name)}</label>`).join('')}</div>
     <div class="two">${sel('Devise des tarifs', 'cur', CURS, x.cur || mcur())}${fld('Délai de livraison (jours)', 'delay', x.delay ?? '', 'number', 'min="0"')}</div>
     ${fld('Conditions de paiement', 'terms', x.terms || '', 'text', 'placeholder="Ex. 30 jours fin de mois"')}
+    <div class="two">${fld("Taux d'échange de ce fournisseur (1 USD = ? CDF)", 'srate', x.rate || '', 'number', 'min="0" placeholder="vide = taux général"')}${fld('Date du taux', 'srateDate', x.rateDate || '', 'date')}</div>
     <label>Tarifs / remarques sur les prix<textarea name="tarifs" rows="2">${esc(x.tarifs || '')}</textarea></label>
     <div class="two">${fld('Objectif mensuel d\'achats (' + mcur() + ')', 'target', x.targetUSD ? (S.settings.mainCur === 'USD' ? x.targetUSD : Math.round(x.targetUSD * S.settings.rate)) : '', 'number', 'min="0"')}${fld('Ristourne / remise de fin de mois (%)', 'rist', x.rist ?? '', 'number', 'min="0" max="100"')}</div>
     <div class="two">${fld('Commission sur mes ventes de ses produits (%)', 'comm', x.comm ?? '', 'number', 'min="0" max="100"')}<label class="chk" style="align-self:end"><input type="checkbox" name="commEom" ${x.commEom !== false ? 'checked' : ''}> Payée en fin de mois</label></div>
@@ -1539,7 +1599,9 @@ A.partform = d => {
       if (isC) data.limit = r2(S.settings.mainCur === 'USD' ? num(v.limit) : num(v.limit) / S.settings.rate);
       else {
         const rating = {}; CRITERIA.forEach(([c]) => { if (v['r_' + c] !== '') rating[c] = Math.min(100, Math.max(0, num(v['r_' + c]))); });
-        Object.assign(data, { manager: v.manager, address: v.address, photo: $('#sphoto').value || x.photo || '', cats: $$('[data-cat]', f).filter(c => c.checked).map(c => c.dataset.cat), cur: v.cur, delay: v.delay === '' ? '' : num(v.delay), terms: v.terms, tarifs: v.tarifs,
+        const newRate = v.srate === '' ? '' : num(v.srate);
+        if (d.id && String(x.rate || '') !== String(newRate)) jr(b, 'Taux fournisseur', `Taux de ${data.name} : ${x.rate || 'général (' + S.settings.rate + ')'} → ${newRate || 'général'} FC pour 1 $`);
+        Object.assign(data, { rate: newRate, rateDate: newRate ? (v.srateDate || dayKey()) : '', manager: v.manager, address: v.address, photo: $('#sphoto').value || x.photo || '', cats: $$('[data-cat]', f).filter(c => c.checked).map(c => c.dataset.cat), cur: v.cur, delay: v.delay === '' ? '' : num(v.delay), terms: v.terms, tarifs: v.tarifs,
           targetUSD: r2(S.settings.mainCur === 'USD' ? num(v.target) : num(v.target) / S.settings.rate), rist: v.rist === '' ? '' : num(v.rist), comm: v.comm === '' ? '' : num(v.comm), commEom: !!v.commEom, promo: v.promo, rating, lat: v.lat === '' ? '' : num(v.lat), lng: v.lng === '' ? '' : num(v.lng) });
       }
       if (!d.id) Object.assign(data, { debt: 0, ts: Date.now(), createdBy: who(), ...(isC ? { spent: 0 } : { bought: 0 }) });
@@ -1567,9 +1629,11 @@ A.pdetail = d => {
   const borrowed = isC ? sum(hist, s => s.pay?.credit || 0) : sum(hist.filter(p => p.payType === 'credit'), p => p.total), debt = x.debt || 0, paid = borrowed - debt;
   const prods = !isC ? [...new Set([...hist.flatMap(p => p.items.map(i => i.name)), ...S.products.filter(p => p.supplierId === x.id).map(p => p.name)])] : [];
   const open = (isC ? unsettledClient(x) : unsettledSupplier(x)), mStart = rangeFor('month')[0], monthBuy = isC ? 0 : sum(hist.filter(p => p.ts >= mStart), p => p.total);
+  const U = n => isC ? usd(n) : fmAt(n, supRate(x));   // dettes fournisseur affichées au taux propre du fournisseur
   const w = modal(x.name, `${x.photo ? `<img src="${x.photo}" style="width:64px;height:64px;border-radius:14px;object-fit:cover">` : ''}
     <div class="mi"><span>Téléphone</span><b>${esc(x.phone || '—')}</b></div>
     ${isC ? `<div class="mi"><span>Plafond de crédit</span><b>${usd(x.limit || 0)}</b></div>` : `<div class="mi"><span>Responsable</span><b>${esc(x.manager || '—')}</b></div><div class="mi"><span>Adresse</span><b>${esc(x.address || '—')}</b></div>
+      <div class="mi"><span>Taux d'échange</span><b>1 $ = ${supRate(x).toLocaleString('fr-FR')} FC${+x.rate > 0 ? ' (propre au fournisseur' + (x.rateDate ? ', au ' + x.rateDate : '') + ')' : ' (taux général)'}</b></div>
       ${x.terms ? `<div class="mi"><span>Conditions de paiement</span><b>${esc(x.terms)}</b></div>` : ''}${x.delay !== '' && x.delay != null ? `<div class="mi"><span>Délai de livraison</span><b>${x.delay} j</b></div>` : ''}${x.tarifs ? `<div class="mi"><span>Tarifs</span><b>${esc(x.tarifs)}</b></div>` : ''}
       ${x.promo ? `<div class="mi"><span>Promotion</span><b>${esc(x.promo)}</b></div>` : ''}${x.rist !== '' && x.rist != null ? `<div class="mi"><span>Ristourne fin de mois</span><b>${x.rist}% ≈ ${usd(monthBuy * x.rist / 100)} ce mois</b></div>` : ''}
       ${x.comm ? `<h3 style="margin-top:10px">Commissions (${x.comm}% sur mes ventes de ses produits${x.commEom !== false ? ', payées en fin de mois' : ''})</h3>${commRows(x).map(r => `<div class="mi"><span>${esc(r.label)}</span><b>${r.closed ? usd(r.amt) : '<small class="muted">visible à la fin du mois</small>'}</b></div>`).join('')}` : ''}
@@ -1579,19 +1643,19 @@ A.pdetail = d => {
       ${CRITERIA.map(([c, t]) => x.rating?.[c] != null ? `<div class="mi sm"><span>${t}</span><span>${x.rating[c]}/100</span></div>` : '').join('')}
       ${prods.length ? `<div class="mi"><span>Produits fournis</span><b style="text-align:right">${esc(prods.join(', '))}</b></div>` : ''}
       ${x.lat !== '' && x.lat != null ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${x.lat},${x.lng}">${ic('pin', 16)} Localiser</a>` : ''}`}
-    <div class="mi"><span>${isC ? 'Montant emprunté (crédits)' : 'Total à crédit'}</span><b>${usd(borrowed)}</b></div><div class="mi"><span>Déjà payé</span><b>${usd(paid)}</b></div><div class="mi"><span>Solde restant</span><b class="neg">${usd(debt)}</b></div>
+    <div class="mi"><span>${isC ? 'Montant emprunté (crédits)' : 'Total à crédit'}</span><b>${U(borrowed)}</b></div><div class="mi"><span>Déjà payé</span><b>${U(paid)}</b></div><div class="mi"><span>Solde restant</span><b class="neg">${U(debt)}</b></div>
     ${debt > 0.004 ? `<div class="row end"><button class="btn orange" id="paydebt">${isC ? 'Encaisser un remboursement' : 'Payer le fournisseur'}</button></div>` : ''}
-    ${open.length ? `<h3 style="margin-top:12px">Échéances</h3>${open.map(o => `<div class="mi"><span>${isC ? o.s.no : fmtDate(o.p.ts)} — échéance ${o.due || '—'}</span><b class="${o.due && o.due < dayKey() ? 'neg' : ''}">${usd(o.left)}</b></div>`).join('')}` : ''}
-    <h3 style="margin-top:12px">${isC ? 'Historique des achats' : 'Historique des approvisionnements'}</h3>${hist.slice(0, 25).map(h => `<div class="mi"><span>${fmtDate(h.ts)} ${isC ? h.no : ''}</span><b>${usd(h.total)}</b></div>`).join('') || '<p class="muted">Aucun.</p>'}
+    ${open.length ? `<h3 style="margin-top:12px">Échéances</h3>${open.map(o => `<div class="mi"><span>${isC ? o.s.no : fmtDate(o.p.ts)} — échéance ${o.due || '—'}</span><b class="${o.due && o.due < dayKey() ? 'neg' : ''}">${U(o.left)}</b></div>`).join('')}` : ''}
+    <h3 style="margin-top:12px">${isC ? 'Historique des achats' : 'Historique des approvisionnements'}</h3>${hist.slice(0, 25).map(h => `<div class="mi"><span>${fmtDate(h.ts)} ${isC ? h.no : ''}</span><b>${U(h.total)}</b></div>`).join('') || '<p class="muted">Aucun.</p>'}
     <h3 style="margin-top:12px">Remboursements / règlements</h3>${pays.map(o => `<div class="mi"><span>${fmtDate(o.ts)} · ${esc(o.user || '')}</span><b>${money(Math.abs(o.amt), o.cur)}</b></div>`).join('') || '<p class="muted">Aucun.</p>'}
     ${isC && x.phone && debt > 0.004 ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="https://wa.me/${String(x.phone).replace(/\D/g, '')}?text=${encodeURIComponent('Bonjour ' + x.name + ', rappel : votre solde chez ' + S.settings.shop + ' est de ' + usd(debt) + '.')}">Envoyer un rappel WhatsApp</a>` : ''}`, { wide: true });
   $('#paydebt', w)?.addEventListener('click', () => { w.close(); payDebt(x, isC, k); });
 };
 function payDebt(x, isC, k) {
   const accs = accOptions(true), def = S.settings.mainCur === 'USD' ? 'USD' : 'CDF';
-  form(isC ? 'Remboursement du client' : 'Paiement du fournisseur', `<div class="hint">Dette actuelle : <b>${usd(x.debt)}</b>. ${isC ? 'Le montant sera ajouté à la caisse.' : 'Le montant sera déduit de la caisse (réduction progressive de la dette).'}</div>
+  form(isC ? 'Remboursement du client' : 'Paiement du fournisseur', `<div class="hint">Dette actuelle : <b>${isC ? usd(x.debt) : fmAt(x.debt, supRate(x))}</b>.${!isC && +x.rate > 0 ? ` Taux de ce fournisseur : 1 $ = ${(+x.rate).toLocaleString('fr-FR')} FC (appliqué au règlement en CDF).` : ''} ${isC ? 'Le montant sera ajouté à la caisse.' : 'Le montant sera déduit de la caisse (réduction progressive de la dette).'}</div>
     ${sel('Compte', 'acc', accs, def)}${fld('Montant (dans la devise du compte)', 'amt', '', 'number', 'required min="0"')}`, async v => {
-    const amt = num(v.amt), au = toUSD(amt, v.acc); if (amt <= 0) throw new Error('Montant invalide');
+    const amt = num(v.amt), au = isC ? toUSD(amt, v.acc) : toUSDs(amt, v.acc, x); if (amt <= 0) throw new Error('Montant invalide');
     if (au > x.debt + 0.01) throw new Error('Le montant dépasse la dette');
     if (!isC && balances()[v.acc] < amt - 1e-9) throw new Error('Solde de ce compte insuffisant');
     const b = batch(); cashop(b, isC ? 'debt_client' : 'debt_supplier', v.acc, isC ? amt : -amt, (isC ? 'Remboursement ' : 'Paiement ') + x.name, x.id);
@@ -2243,16 +2307,10 @@ function aiSummary() {
 async function askAI(q) {
   let key = ''; try { key = localStorage.getItem('ksp_ai_key') || ''; } catch { /* */ }
   if (!key) return null;
-  const prompt = `Tu es KAJIMINYI ASSISTANT, assistant d'une application de gestion de commerce en RDC. Réponds en français, brièvement et de façon pratique. Pour les chiffres du commerce, utilise UNIQUEMENT les données JSON ci-dessous et n'invente jamais de chiffre : si l'information manque, dis-le. Pour les conseils généraux (marketing, gestion, stock, clients), tu peux donner des idées concrètes adaptées à un petit et grand commerce en RDC.\nDONNÉES: ${aiSummary()}\nQUESTION: ${q}`;
-  const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-  body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }] })
-});
+  const prompt = `Tu es KAJIMINYI ASSISTANT, assistant d'une application de gestion de commerce en RDC. Réponds en français, brièvement, UNIQUEMENT à partir des données JSON ci-dessous. N'invente jamais de chiffre : si l'information manque, dis-le.\nDONNÉES: ${aiSummary()}\nQUESTION: ${q}`;
+  const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + encodeURIComponent(key), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }] }) });
   if (!r.ok) throw new Error('Service IA indisponible (' + r.status + ')');
-  const j = await r.json(); return esc(j.candidates?.[0]?.content?.parts?.[0]?.text || '')
-  .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
-  .replace(/\n/g, '<br>');
+  const j = await r.json(); return esc(j.candidates?.[0]?.content?.parts?.[0]?.text || '').replace(/\n/g, '<br>');
 }
 const SUGG = { sales: ['Comment enregistrer une vente ?', "Quel est mon chiffre d'affaires aujourd'hui ?"], products: ['Comment ajouter un produit ?', 'Vérifie mes données'], purchases: ['Comment enregistrer un crédit fournisseur ?', 'Quels produits dois-je commander ?'], cash: ['Pourquoi ma caisse présente-t-elle un écart ?', 'Quel est le solde de la caisse ?'], expenses: ['Combien ai-je dépensé cette semaine ?', 'Pourquoi ma dépense est-elle bloquée ?'], dashboard: ['Quel produit me rapporte le plus ?', 'Quel est mon bénéfice ce mois ?'], default: ['Quels produits se vendent le plus ?', 'Quels clients ont encore des dettes ?', 'Comment faire un inventaire ?'] };
 A.assistant = () => {
