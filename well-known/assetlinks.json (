@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "app.vercel.kajiminyi_stock_pro.twa",
+        "sha256_cert_fingerprints": ["C5:28:D9:5D:B2:32:91:01:B1:D4:A6:D6:24:CA:F2:DE:E4:8E:C4:6A:DF:AD:07:6F:DB:AC:BE:28:F4:E9:7E:81"]
+      }
+    }]
