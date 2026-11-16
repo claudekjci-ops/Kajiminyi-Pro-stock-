@@ -289,6 +289,10 @@ details.adv{border:1px dashed var(--bd);border-radius:12px;padding:8px}details.a
 .jlist .jrow{-webkit-touch-callout:none}
 .purge label.chk{display:flex;gap:8px;align-items:center;padding:6px 0}
 
+/* signature */
+.sigpad{display:block;width:100%;height:150px;border:2px dashed #9ab;border-radius:12px;background:#fff;touch-action:none;user-select:none}
+.sigimg{height:34px;max-width:90px;border:1px solid #ddd;border-radius:6px;background:#fff;margin-left:8px;cursor:pointer}
+
 </style>
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -650,9 +654,9 @@ function jr(b, type, desc, amt = null, cur = '', cat = '', ref = '') {
   return id;
 }
 // cur = compte de caisse (CDF, USD, MMC, MM, BANK) ; amt dans la devise native du compte
-function cashop(b, kind, cur, amt, desc, ref = '', ts = Date.now()) {
+function cashop(b, kind, cur, amt, desc, ref = '', ts = Date.now(), extra = {}) {
   const id = uid(), a = nat(cur) === 'CDF' ? Math.round(amt) : r00(amt);
-  b.set('cashops', id, { id, ts, day: dayKey(ts), kind, cur, amt: a, rate: S.settings.rate, rateDate: S.settings.rateDate || '', desc, ref, user: who(), sid: curSession()?.id || '' });
+  b.set('cashops', id, { id, ts, day: dayKey(ts), kind, cur, amt: a, rate: S.settings.rate, rateDate: S.settings.rateDate || '', desc, ref, user: who(), sid: curSession()?.id || '', ...extra });
 }
 
 function subscribe(onChange) {
@@ -908,7 +912,7 @@ A.dper = d => { dp = d.p; views.dashboard($('#view')); };
 
 /* ================= VENTES ================= */
 let cart = [], sq = '', scat = '', stab = 'new';
-const freshCk = () => ({ disc: 0, client: '', mode: pmAllowed('cdf') && S.settings.mainCur !== 'USD' ? 'cdf' : (pmAllowed('usd') ? 'usd' : (['cdf', 'mmc', 'mm', 'bank'].find(pmAllowed) || 'credit')), cdf: '', usd: '', mmc: '', mm: '', bank: '', credit: '', due: '' });
+const freshCk = () => ({ disc: 0, client: '', mode: pmAllowed('cdf') && S.settings.mainCur !== 'USD' ? 'cdf' : (pmAllowed('usd') ? 'usd' : (['cdf', 'mmc', 'mm', 'bank'].find(pmAllowed) || 'credit')), cdf: '', usd: '', mmc: '', mm: '', bank: '', credit: '', due: '', pname: '' });
 let ck = null;
 const MODES = () => [['cdf', 'Espèces CDF'], ['usd', 'Espèces USD'], ['mmc', 'Mobile Money CDF'], ['mm', 'Mobile Money USD'], ['bank', 'Banque USD'], ['mixte', 'Paiement mixte'], ['credit', 'Crédit']].filter(([k]) => pmAllowed(k));
 
@@ -994,7 +998,7 @@ function openCart() {
       <div class="qty"><button data-ca="dec" data-i="${i}">−</button><input type="number" step="any" min="0" inputmode="decimal" value="${x.qty}" data-cf="qty" data-i="${i}"><button data-ca="inc" data-i="${i}">+</button><button data-ca="rm" data-i="${i}" style="color:var(--r)">✕</button></div></div>`).join('')}
       <div class="frm" style="margin-top:10px"><div class="two">
         <label>Remise (%) — max ${isMgr() ? 100 : S.settings.maxDisc}%<input type="number" step="any" min="0" data-cf="disc" value="${esc(ck.disc)}"></label>
-        <label>Client${needCl ? ' (obligatoire)' : ''}<select data-cf="client"><option value="">— Comptoir —</option>${S.clients.map(c => `<option value="${c.id}" ${ck.client === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label></div></div>
+        <label>Client${needCl ? ' (obligatoire)' : ''}<select data-cf="client"><option value="">— Comptoir —</option><option value="__passant" ${ck.client === '__passant' ? 'selected' : ''}>🚶 Passant (pas dans ma liste)</option>${S.clients.map(c => `<option value="${c.id}" ${ck.client === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label></div>${ck.client === '__passant' ? `<label>Nom ou téléphone du passant (facultatif)<input data-pn placeholder="ex. Jean, 0990000000" value="${esc(ck.pname || '')}" maxlength="60" autocomplete="off"></label>` : ''}</div>
       <div class="totbox"><div class="row sp"><span>Sous-total</span><b>${usd(t.sub)}</b></div><div class="row sp"><span>Remise</span><b>−${usd(t.discAmt)}</b></div>
         <div class="row sp"><span>À PAYER</span><span class="big">${usd(t.total)}</span></div><div class="row sp muted"><span>${S.settings.mainCur === 'USD' ? 'en francs' : 'en dollars'}</span><span>${S.settings.mainCur === 'USD' ? cdf(t.total * S.settings.rate) : usdx(t.total)}</span></div></div>
       <div class="chips">${MODES().map(([k, l]) => `<button class="chip ${ck.mode === k ? 'on' : ''}" data-ca="mode" data-m="${k}">${l}</button>`).join('')}</div>
@@ -1031,7 +1035,7 @@ function openCart() {
     else ck[f] = e.target.value;
     paint();
   });
-  body.addEventListener('input', e => { const f = e.target.dataset.pf; if (f) { ck[f] = e.target.value; reste(); } });
+  body.addEventListener('input', e => { if ('pn' in e.target.dataset) { ck.pname = e.target.value; return; } const f = e.target.dataset.pf; if (f) { ck[f] = e.target.value; reste(); } });
 }
 
 function checkout(w) {
@@ -1044,8 +1048,9 @@ function checkout(w) {
   const pay = payAmounts(t.total);
   if (Math.abs(paidUSD(pay) - t.total) > 0.01) throw new Error('Le total des paiements doit être égal au montant à payer');
   if (pay.usd > 0 && !pmAllowed('usd')) throw new Error("Les paiements en espèces USD ne sont pas autorisés");
-  const cl = S.clients.find(c => c.id === ck.client);
+  const cl = S.clients.find(c => c.id === ck.client), passant = ck.client === '__passant', pnm = (ck.pname || '').trim().slice(0, 60);
   if (pay.credit > 0) {
+    if (passant) throw new Error("Un passant ne peut pas acheter à crédit : enregistrez-le d'abord dans vos clients");
     if (!cl) throw new Error('Choisissez un client pour une vente à crédit');
     if (!(cl.limit > 0) || (cl.debt || 0) + pay.credit > cl.limit + 1e-9) throw new Error(`Plafond de crédit dépassé (plafond ${usd(cl.limit || 0)}, dette ${usd(cl.debt || 0)})`);
   }
@@ -1057,7 +1062,7 @@ function checkout(w) {
   const sale = {
     id, no, ts, day: dayKey(ts), uid: S.user.uid, userName: who(), items, subtotal: r2(t.sub), discount: t.discAmt, discPct: t.disc, total: t.total,
     pay, rate: S.settings.rate, rateDate: S.settings.rateDate || '', mainCur: S.settings.mainCur, due: pay.credit > 0 ? (ck.due || addDays(dayKey(), S.settings.creditDays || 30)) : '',
-    clientId: cl?.id || '', clientName: cl?.name || '', status: 'ok', cost, profit: r2(t.total - cost)
+    clientId: cl?.id || '', clientName: cl?.name || (passant ? 'Passant' + (pnm ? ' — ' + pnm : '') : ''), status: 'ok', cost, profit: r2(t.total - cost)
   };
   const b = batch();
   b.set('sales', id, sale);
@@ -1331,12 +1336,35 @@ A.invview = d => {
 };
 
 // Scan du code-barres directement dans la fiche produit
+// Recherche du nom d'un produit par son code-barres (base ouverte Open Food Facts, couvre surtout l'alimentation et les boissons)
+async function nameFromCode(code) {
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 7000);
+  try {
+    const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,product_name_fr,generic_name,brands,quantity`, { signal: ctl.signal });
+    if (!r.ok) return null; const j = await r.json(); if (j.status !== 1 || !j.product) return null;
+    const p = j.product, n = (p.product_name_fr || p.product_name || p.generic_name || '').trim(); if (!n) return null;
+    const q = (p.quantity || '').trim();
+    return { name: q && !n.toLowerCase().includes(q.toLowerCase()) ? n + ' ' + q : n, brand: (p.brands || '').split(',')[0].trim() };
+  } catch { return null; } finally { clearTimeout(t); }
+}
+async function fillFromCode(code) {
+  const f = document.querySelector('.modal-wrap form'); if (!f || !code) return;
+  const other = S.products.find(x => x.barcode === code && x.id !== (f.dataset.pid || ''));
+  if (other) return toast('Code ' + code + ' déjà utilisé par : ' + other.name, 'err');
+  const nm = f.querySelector('input[name=name]'), br = f.querySelector('input[name=brand]'); if (!nm || nm.value.trim()) return toast('Code lu : ' + code);
+  toast('Code lu : ' + code + ' — recherche du nom…');
+  const r = await nameFromCode(code), g = document.querySelector('.modal-wrap form');
+  if (g !== f) return;
+  if (r && !nm.value.trim()) { nm.value = r.name; if (br && !br.value.trim() && r.brand) br.value = r.brand; toast('Nom trouvé : ' + r.name); }
+  else toast('Nom introuvable pour ce code (ou pas de connexion) : saisissez-le', 'err');
+}
 A.pscan = () => scanCode(code => {
   const inp = document.querySelector('.modal-wrap form input[name=barcode]');
-  const other = S.products.find(x => x.barcode === code && x.id !== (document.querySelector('.modal-wrap form')?.dataset.pid || ''));
   if (inp) { inp.value = code; inp.dispatchEvent(new Event('input', { bubbles: true })); }
-  toast(other ? 'Code lu : ' + code + ' (déjà utilisé par ' + other.name + ')' : 'Code lu : ' + code, other ? 'err' : 'ok');
+  fillFromCode(code);
 }, { title: 'Scanner le code-barres du produit' });
+// code-barres tapé à la main : même recherche à la sortie du champ
+document.addEventListener('change', e => { const t = e.target; if (t?.name === 'barcode' && t.closest('.modal-wrap form') && t.value.trim().length >= 8) fillFromCode(t.value.trim()); });
 
 }
 {
@@ -1582,7 +1610,7 @@ views.partners = el => {
     return;
   }
   const isC = ptab === 'clients', L = isC ? S.clients : S.suppliers;
-  el.innerHTML = page('Clients & Fournisseurs', `<button class="btn" data-act="partform" data-k="${ptab}">${ic('plus')} ${isC ? 'Nouveau client' : 'Nouveau fournisseur'}</button>${!isC && S.suppliers.length > 1 ? `<button class="btn ghost" data-act="supcompare">Comparer</button>` : ''}`, tabs + `
+  el.innerHTML = page('Clients & Fournisseurs', `<button class="btn" data-act="partform" data-k="${ptab}">${ic('plus')} ${isC ? 'Nouveau client' : 'Nouveau fournisseur'}</button>${!isC && S.suppliers.length > 1 ? `<button class="btn ghost" data-act="supcompare">Comparer</button>` : ''}${isC ? `<button class="btn ghost" data-act="top20">🏆 Top 20</button>` : ''}`, tabs + `
     <label class="sbox">${ic('search', 18)}<input data-filter="#plist2" placeholder="Rechercher…"></label><div class="llist" id="plist2">
     ${[...L].sort((a, b) => a.name.localeCompare(b.name)).map(x => `<div class="lrow" data-s="${esc((x.name + ' ' + (x.phone || '')).toLowerCase())}">
       ${x.photo ? `<img class="th" src="${x.photo}" alt="">` : `<span class="jic ${isC ? 'blue' : 'green'}">${ic('users', 20)}</span>`}
@@ -1670,21 +1698,42 @@ A.pdetail = d => {
     ${debt > 0.004 ? `<div class="row end"><button class="btn orange" id="paydebt">${isC ? 'Encaisser un remboursement' : 'Payer le fournisseur'}</button></div>` : ''}
     ${open.length ? `<h3 style="margin-top:12px">Échéances</h3>${open.map(o => `<div class="mi"><span>${isC ? o.s.no : fmtDate(o.p.ts)} — échéance ${o.due || '—'}</span><b class="${o.due && o.due < dayKey() ? 'neg' : ''}">${U(o.left)}</b></div>`).join('')}` : ''}
     <h3 style="margin-top:12px">${isC ? 'Historique des achats' : 'Historique des approvisionnements'}</h3>${hist.slice(0, 25).map(h => `<div class="mi"><span>${fmtDate(h.ts)} ${isC ? h.no : ''}</span><b>${U(h.total)}</b></div>`).join('') || '<p class="muted">Aucun.</p>'}
-    <h3 style="margin-top:12px">Remboursements / règlements</h3>${pays.map(o => `<div class="mi"><span>${fmtDate(o.ts)} · ${esc(o.user || '')}</span><b>${money(Math.abs(o.amt), o.cur)}</b></div>`).join('') || '<p class="muted">Aucun.</p>'}
+    <h3 style="margin-top:12px">Remboursements / règlements</h3>${pays.map(o => `<div class="mi"><span>${fmtDate(o.ts)} · ${esc(o.user || '')}${o.rcvName ? '<br><small class="muted">Reçu par <b>' + esc(o.rcvName) + '</b></small>' : ''}</span><b>${money(Math.abs(o.amt), o.cur)}</b>${o.rcvSig ? `<img src="${o.rcvSig}" alt="Signature" class="sigimg" data-act="sigview" data-id="${o.id}">` : ''}</div>`).join('') || '<p class="muted">Aucun.</p>'}
     ${isC && x.phone && debt > 0.004 ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="https://wa.me/${String(x.phone).replace(/\D/g, '')}?text=${encodeURIComponent('Bonjour ' + x.name + ', rappel : votre solde chez ' + S.settings.shop + ' est de ' + usd(debt) + '.')}">Envoyer un rappel WhatsApp</a>` : ''}`, { wide: true });
   $('#paydebt', w)?.addEventListener('click', () => { w.close(); payDebt(x, isC, k); });
 };
+let pad = null;
 function payDebt(x, isC, k) {
   const accs = accOptions(true), def = S.settings.mainCur === 'USD' ? 'USD' : 'CDF';
   form(isC ? 'Remboursement du client' : 'Paiement du fournisseur', `<div class="hint">Dette actuelle : <b>${isC ? usd(x.debt) : fmAt(x.debt, supRate(x))}</b>.${!isC && +x.rate > 0 ? ` Taux de ce fournisseur : 1 $ = ${(+x.rate).toLocaleString('fr-FR')} FC (appliqué au règlement en CDF).` : ''} ${isC ? 'Le montant sera ajouté à la caisse.' : 'Le montant sera déduit de la caisse (réduction progressive de la dette).'}</div>
-    ${sel('Compte', 'acc', accs, def)}${fld('Montant (dans la devise du compte)', 'amt', '', 'number', 'required min="0"')}`, async v => {
+    ${sel('Compte', 'acc', accs, def)}${fld('Montant (dans la devise du compte)', 'amt', '', 'number', 'required min="0"')}
+    ${isC ? '' : `${fld("Nom de la personne qui reçoit l'argent", 'rcv', '', 'text', 'required maxlength="60" autocomplete="off"')}
+    <label>Signature de cette personne <small class="muted">(à faire au doigt)</small><canvas id="sigpad" class="sigpad"></canvas></label><div class="row end"><button type="button" class="btn ghost sm" id="sigclr">Effacer la signature</button></div>`}`, async v => {
     const amt = num(v.amt), au = isC ? toUSD(amt, v.acc) : toUSDs(amt, v.acc, x); if (amt <= 0) throw new Error('Montant invalide');
     if (au > x.debt + 0.01) throw new Error('Le montant dépasse la dette');
     if (!isC && balances()[v.acc] < amt - 1e-9) throw new Error('Solde de ce compte insuffisant');
-    const b = batch(); cashop(b, isC ? 'debt_client' : 'debt_supplier', v.acc, isC ? amt : -amt, (isC ? 'Remboursement ' : 'Paiement ') + x.name, x.id);
+    let extra = {}, rcv = '';
+    if (!isC) {
+      rcv = (v.rcv || '').trim(); if (!rcv) throw new Error("Indiquez le nom de la personne qui reçoit l'argent");
+      if (pad.empty()) throw new Error('La signature de la personne est obligatoire');
+      extra = { rcvName: rcv, rcvSig: pad.data() };
+    }
+    const b = batch(); cashop(b, isC ? 'debt_client' : 'debt_supplier', v.acc, isC ? amt : -amt, (isC ? 'Remboursement ' : 'Paiement ') + x.name, x.id, Date.now(), extra);
     b.upd(k, x.id, { debt: inc(-Math.min(au, x.debt)) });
-    jr(b, isC ? 'Remboursement' : 'Paiement dette', `${isC ? 'Remboursement de' : 'Paiement à'} ${x.name} — ${ACC[v.acc][0]}`, amt, nat(v.acc), '', x.id); b.commit(); toast('Règlement enregistré');
-  });
+    jr(b, isC ? 'Remboursement' : 'Paiement dette', `${isC ? 'Remboursement de' : 'Paiement à'} ${x.name} — ${ACC[v.acc][0]}${rcv ? ' — reçu par ' + rcv : ''}`, amt, nat(v.acc), '', x.id); b.commit(); toast('Règlement enregistré');
+  }, { onOpen: w => { if (!isC) pad = sigPad(w); } });
+}
+// zone de signature au doigt (image PNG légère enregistrée avec le règlement)
+function sigPad(w) {
+  const c = w.querySelector('#sigpad'), g = c.getContext('2d'); let dr = false, dirty = false, W = 0;
+  const fit = () => { const r = c.getBoundingClientRect(); W = Math.round(r.width); c.width = W * 2; c.height = Math.round(r.height * 2); g.setTransform(2, 0, 0, 2, 0, 0); g.lineWidth = 2.4; g.lineCap = g.lineJoin = 'round'; g.strokeStyle = '#111'; };
+  const pt = e => { const r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  c.addEventListener('pointerdown', e => { if (Math.round(c.getBoundingClientRect().width) !== W && !dirty) fit(); dr = true; c.setPointerCapture?.(e.pointerId); const [x, y] = pt(e); g.beginPath(); g.moveTo(x, y); g.lineTo(x + .1, y + .1); g.stroke(); dirty = true; e.preventDefault(); });
+  c.addEventListener('pointermove', e => { if (!dr) return; const [x, y] = pt(e); g.lineTo(x, y); g.stroke(); e.preventDefault(); });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => c.addEventListener(ev, () => { dr = false; }));
+  w.querySelector('#sigclr').onclick = () => { g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, c.width, c.height); g.restore(); dirty = false; };
+  fit();
+  return { empty: () => !dirty, data: () => { const o = document.createElement('canvas'); o.width = 360; o.height = Math.round(360 * c.height / c.width); const k = o.getContext('2d'); k.fillStyle = '#fff'; k.fillRect(0, 0, o.width, o.height); k.drawImage(c, 0, 0, o.width, o.height); return o.toDataURL('image/png'); } };
 }
 A.supcompare = () => {
   const withBuys = S.products.filter(p => S.purchases.some(h => h.supplierId && h.items.some(i => i.pid === p.id)));
@@ -1847,6 +1896,36 @@ A.udel = async d => {
   if (!await confirmBox(`Supprimer l'accès de « ${esc(u.name || u.id)} » ? Son historique reste conservé.`, 'Supprimer')) return;
   const b = batch(); b.del('users', u.id); jr(b, 'Utilisateur', 'Accès supprimé : ' + u.id + ' par ' + who()); b.commit(); document.querySelector('.modal-wrap')?.close?.(); toast('Accès supprimé');
 };
+
+/* ---- Top 20 des clients (montant et quantité achetés) ---- */
+let tpPer = 'all', tpBy = 'usd';
+function topData() {
+  const [from, to] = tpPer === 'all' ? [0, Infinity] : rangeFor(tpPer), m = new Map();
+  S.sales.filter(s => s.status !== 'cancelled' && s.clientId && s.ts >= from && s.ts <= to).forEach(s => {
+    const c = S.clients.find(x => x.id === s.clientId); if (!c) return;
+    const o = m.get(c.id) || { c, usd: 0, qty: 0, n: 0, last: 0 }; o.usd += s.total || 0; o.qty += sum(s.items || [], i => (i.qty || 0) * (i.factor || 1)); o.n++; o.last = Math.max(o.last, s.ts); m.set(c.id, o);
+  });
+  return [...m.values()].sort((a, b) => tpBy === 'qty' ? b.qty - a.qty || b.usd - a.usd : b.usd - a.usd || b.qty - a.qty).slice(0, 20);
+}
+const medal = i => ['🥇', '🥈', '🥉'][i] || (i + 1) + '.';
+function topPaint(w) {
+  const L = topData(), tot = sum(L, o => o.usd);
+  w.querySelector('.sheet-b').innerHTML = `<div class="chips">${[['all', 'Tout'], ['month', 'Ce mois'], ['year', 'Cette année']].map(([k, t]) => `<button class="chip ${tpPer === k ? 'on' : ''}" data-tp="${k}">${t}</button>`).join('')}</div>
+    <div class="chips">${[['usd', 'Par montant'], ['qty', 'Par quantité']].map(([k, t]) => `<button class="chip ${tpBy === k ? 'on' : ''}" data-tb="${k}">${t}</button>`).join('')}</div>
+    <div class="llist">${L.map((o, i) => `<div class="lrow"><span class="jic ${i < 3 ? 'orange' : 'blue'}" style="font-size:18px">${medal(i)}</span><div class="jm"><b>${esc(o.c.name)}</b><small>${o.n} achat(s) · dernier le ${fmtDate(o.last).slice(0, 10)}${tot > 0 ? ' · ' + Math.round(o.usd / tot * 100) + ' % du top' : ''}</small></div>
+      <div class="jr"><b>${usd(o.usd)}</b><small>${o.qty.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} pièce(s)</small></div></div>`).join('') || '<p class="muted">Aucun achat de client enregistré sur cette période.</p>'}</div>
+    <p class="muted sm">Les clients de passage (« Passant ») ne sont pas comptés : seuls les clients de votre liste le sont. Les ventes annulées sont exclues. Quantité en pièces (1 carton de 12 = 12 pièces).</p>
+    <div class="row end"><button class="btn ghost sm" data-tx>${ic('dl', 16)} Excel</button></div>`;
+}
+A.top20 = () => {
+  const w = modal('🏆 Top 20 des clients', '', { wide: true }); topPaint(w);
+  w.addEventListener('click', e => {
+    const p = e.target.closest('[data-tp]'), b = e.target.closest('[data-tb]');
+    if (p) { tpPer = p.dataset.tp; topPaint(w); } else if (b) { tpBy = b.dataset.tb; topPaint(w); }
+    else if (e.target.closest('[data-tx]')) exportXLSX('Top 20 clients', ['Rang', 'Client', 'Montant', 'Pièces', 'Achats'], topData().map((o, i) => [i + 1, o.c.name, o.usd, o.qty, o.n]));
+  });
+};
+A.sigview = d => { const o = S.cashops.find(x => x.id === d.id); if (o?.rcvSig) modal('Signature', `<p><b>${esc(o.rcvName || '')}</b><br><small class="muted">${fmtDate(o.ts)}</small></p><img src="${o.rcvSig}" alt="Signature" style="width:100%;background:#fff;border:1px solid #ddd;border-radius:10px">`); };
 
 }
 {
@@ -2387,7 +2466,7 @@ function aiContext() {
 const SYS = `Tu es KAJIMINYI ASSISTANT, conseiller en business intégré à l'application de gestion KAJIMINYI STOCK PRO, utilisée en République démocratique du Congo (RDC).
 MISSION : aider l'utilisateur sur tout ce qui concerne le business, le commerce, l'entrepreneuriat, la gestion des petits et des grands commerces, des PME et des entreprises en RDC : idées d'activités, stratégies de vente, achats et approvisionnement, gestion du stock, prix et marges, trésorerie, crédit et dettes, fidélisation, marketing de proximité (WhatsApp, Facebook, bouche-à-oreille), recrutement et gestion des employés, formalisation, croissance, risques, et utilisation de l'application.
 CONTEXTE LOCAL À PRENDRE EN COMPTE : double monnaie CDF/USD et variation du taux de change, Mobile Money (Airtel Money, Orange Money, M-Pesa, Vodacom), importation et fournisseurs de Kinshasa, Lubumbashi, Goma, Kolwezi, etc., coûts de transport et d'électricité, marchés et commerce de détail, vente à crédit informelle, concurrence.
-FORMAT : réponds toujours en français, de façon un peu courte, détaillée et structurée : une courte introduction, plusieurs parties avec titres (## Titre), des listes à puces ou numérotées, des exemples concrets adaptés à la RDC, un plan d'action par étapes, les pièges à éviter, puis une conclusion avec la prochaine action à faire. Mets en **gras** les mots-clés, les noms de produits, les chiffres importants et les actions clés.
+FORMAT : réponds toujours en français, de façon LONGUE, détaillée et structurée : une courte introduction, plusieurs parties avec titres (## Titre), des listes à puces ou numérotées, des exemples concrets adaptés à la RDC, un plan d'action par étapes, les pièges à éviter, puis une conclusion avec la prochaine action à faire. Mets en **gras** les mots-clés, les noms de produits, les chiffres importants et les actions clés.
 RÈGLES : 1) Pour tout chiffre propre au commerce de l'utilisateur (ventes, stock, dettes, caisse…), utilise UNIQUEMENT les données JSON ci-dessous ; n'invente jamais un chiffre de son commerce et dis-le si l'information manque. 2) Les idées et conseils généraux sont bienvenus, mais ne promets jamais de gains garantis ; donne des ordres de grandeur seulement comme hypothèses clairement signalées. 3) Pour les lois, taxes et démarches (DGI, DGRAD, RCCM, ID national, etc.), reste prudent et invite à vérifier auprès des services officiels, car elles changent. 4) Tu ne modifies aucune donnée ; l'utilisateur fait les actions dans l'application. 5) Si la question concerne l'application, explique les étapes dans les modules (Ventes, Produits, Caisse, etc.).`;
 const httpErr = async r => { let m = ''; try { m = (await r.json())?.error?.message || ''; } catch { /* */ } return { status: r.status, msg: m }; };
 async function listModels(key) {
