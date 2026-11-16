@@ -281,6 +281,14 @@ details.adv{border:1px dashed var(--bd);border-radius:12px;padding:8px}details.a
 
 .bmsg.bot p{margin:4px 0}.bmsg.bot ul,.bmsg.bot ol{margin:4px 0;padding-left:20px}.bmsg.bot .aih{margin-top:10px}.bot .botlog{max-height:52vh}.bmsg.bot{-webkit-user-select:text;user-select:text}
 
+/* appui long (historique) */
+.lp-pop{position:fixed;left:50%;bottom:92px;transform:translate(-50%,20px);opacity:0;z-index:400;background:var(--dg);color:#fff;padding:14px 16px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35);width:min(92vw,380px);transition:.2s}
+.lp-pop.on{opacity:1;transform:translate(-50%,0)}
+.lp-pop b{display:block;margin-bottom:10px}
+.lp-pop .btn.ghost{color:#fff;border-color:rgba(255,255,255,.4)}
+.jlist .jrow{-webkit-touch-callout:none}
+.purge label.chk{display:flex;gap:8px;align-items:center;padding:6px 0}
+
 </style>
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -622,6 +630,18 @@ function batch() {
     }
   };
   return api;
+}
+// Suppression définitive de collections entières (administrateur). Lit le serveur, puis supprime par paquets de 400.
+async function purgeCols(cols, onProgress) {
+  let n = 0;
+  for (const c of cols) {
+    const snap = await F.getDocs(F.collection(F.db, c)), docs = snap.docs;
+    for (let i = 0; i < docs.length; i += 400) {
+      const b = F.writeBatch(F.db); docs.slice(i, i + 400).forEach(d => b.delete(d.ref));
+      await b.commit(); n += Math.min(400, docs.length - i); onProgress?.(c, n);
+    }
+  }
+  return n;
 }
 const who = () => S.me?.name || S.user?.email || '';
 function jr(b, type, desc, amt = null, cur = '', cat = '', ref = '') {
@@ -1701,8 +1721,39 @@ views.journal = el => {
       ${js ? `<small><span class="badge ${JST[js.status]?.[0]}">${JST[js.status]?.[1] || js.status}</span></small>` : SENSITIVE.includes(j.type) ? `<small><a href="#" data-act="jjust" data-id="${j.id}">Ajouter une justification</a></small>` : ''}</div>
       <b class="jamt ${sg === '+' ? 'pos' : sg === '−' ? 'neg' : ''}">${j.amt == null ? '' : sg + (j.cur ? money(Math.abs(j.amt), j.cur) : j.amt)}</b></div>`; }).join('') || '<p class="muted">Aucune opération.</p>'}
     ${all.length > jlimit ? `<button class="btn ghost" style="width:100%;justify-content:center;margin-top:8px" data-act="jmore">Voir plus (${all.length - jlimit})</button>` : ''}</div>
-    <p class="muted sm">Journal en lecture seule : rien ne peut être modifié ni supprimé. Chaque ligne porte le nom de la personne qui a agi.</p>`);
+    <p class="muted sm">Journal en lecture seule : aucune ligne ne peut être modifiée. Chaque ligne porte le nom de la personne qui a agi.${isAdmin() ? ' Administrateur : appui long sur une ligne pour tout effacer.' : ''}</p>`);
 };
+// appui long (≈0,7 s) sur une ligne de l'historique → proposition « Tout effacer » (administrateur)
+(() => {
+  let timer = null, sx = 0, sy = 0;
+  const stop = () => { clearTimeout(timer); timer = null; };
+  const ask = () => {
+    if (!isAdmin()) { toast("Seul l'administrateur peut effacer l'historique", 'err'); return; }
+    navigator.vibrate?.(40);
+    if (document.querySelector('.lp-pop')) return;
+    const d = document.createElement('div'); d.className = 'lp-pop';
+    d.innerHTML = `<b>Effacer tout l'historique ?</b><div class="row end"><button class="btn ghost sm" data-no>Annuler</button><button class="btn red sm" data-yes>Tout effacer</button></div>`;
+    document.body.appendChild(d); requestAnimationFrame(() => d.classList.add('on'));
+    const close = () => { d.classList.remove('on'); setTimeout(() => d.remove(), 200); };
+    const auto = setTimeout(close, 8000);
+    d.querySelector('[data-no]').onclick = () => { clearTimeout(auto); close(); };
+    d.querySelector('[data-yes]').onclick = async e => {
+      clearTimeout(auto); e.target.disabled = true; e.target.textContent = 'Effacement…';
+      try {
+        await purgeCols(['journal']);
+        const b = batch(); jr(b, 'Historique', 'Historique effacé par ' + who()); await b.commit();
+        toast('Tout est effacé'); close();
+      } catch (err) { toast(err.code === 'permission-denied' ? 'Refusé : mettez à jour les règles Firestore (suppression du journal)' : (err.message || String(err)), 'err'); close(); }
+    };
+  };
+  document.addEventListener('pointerdown', e => {
+    const row = e.target.closest?.('.jlist .jrow'); if (!row || e.target.closest('a,button')) return;
+    sx = e.clientX; sy = e.clientY; stop(); timer = setTimeout(() => { timer = null; ask(); }, 700);
+  });
+  document.addEventListener('pointermove', e => { if (timer && Math.hypot(e.clientX - sx, e.clientY - sy) > 10) stop(); });
+  ['pointerup', 'pointercancel', 'scroll'].forEach(ev => document.addEventListener(ev, stop, { passive: true, capture: true }));
+  document.addEventListener('contextmenu', e => { if (e.target.closest?.('.jlist .jrow')) e.preventDefault(); });
+})();
 A.jmore = () => { jlimit += 25; views.journal($('#view')); };
 A.jtype = d => { jf.type = d.t; jlimit = 15; views.journal($('#view')); };
 A.jjust = d => { const j = S.journal.find(x => x.id === d.id); if (j) askJustif('journal', j.ref || j.id, j.type + ' : ' + j.desc); };
@@ -2336,7 +2387,7 @@ function aiContext() {
 const SYS = `Tu es KAJIMINYI ASSISTANT, conseiller en business intégré à l'application de gestion KAJIMINYI STOCK PRO, utilisée en République démocratique du Congo (RDC).
 MISSION : aider l'utilisateur sur tout ce qui concerne le business, le commerce, l'entrepreneuriat, la gestion des petits et des grands commerces, des PME et des entreprises en RDC : idées d'activités, stratégies de vente, achats et approvisionnement, gestion du stock, prix et marges, trésorerie, crédit et dettes, fidélisation, marketing de proximité (WhatsApp, Facebook, bouche-à-oreille), recrutement et gestion des employés, formalisation, croissance, risques, et utilisation de l'application.
 CONTEXTE LOCAL À PRENDRE EN COMPTE : double monnaie CDF/USD et variation du taux de change, Mobile Money (Airtel Money, Orange Money, M-Pesa, Vodacom), importation et fournisseurs de Kinshasa, Lubumbashi, Goma, Kolwezi, etc., coûts de transport et d'électricité, marchés et commerce de détail, vente à crédit informelle, concurrence.
-FORMAT : réponds toujours en français, de façon LONGUE, détaillée et structurée : une courte introduction, plusieurs parties avec titres (## Titre), des listes à puces ou numérotées, des exemples concrets adaptés à la RDC, un plan d'action par étapes, les pièges à éviter, puis une conclusion avec la prochaine action à faire. Mets en **gras** les mots-clés, les noms de produits, les chiffres importants et les actions clés.
+FORMAT : réponds toujours en français, de façon un peu  courte,détaillée et structurée : une courte introduction, plusieurs parties avec titres (## Titre), des listes à puces ou numérotées, des exemples concrets adaptés à la RDC, un plan d'action par étapes, les pièges à éviter, puis une conclusion avec la prochaine action à faire. Mets en **gras** les mots-clés, les noms de produits, les chiffres importants et les actions clés.
 RÈGLES : 1) Pour tout chiffre propre au commerce de l'utilisateur (ventes, stock, dettes, caisse…), utilise UNIQUEMENT les données JSON ci-dessous ; n'invente jamais un chiffre de son commerce et dis-le si l'information manque. 2) Les idées et conseils généraux sont bienvenus, mais ne promets jamais de gains garantis ; donne des ordres de grandeur seulement comme hypothèses clairement signalées. 3) Pour les lois, taxes et démarches (DGI, DGRAD, RCCM, ID national, etc.), reste prudent et invite à vérifier auprès des services officiels, car elles changent. 4) Tu ne modifies aucune donnée ; l'utilisateur fait les actions dans l'application. 5) Si la question concerne l'application, explique les étapes dans les modules (Ventes, Produits, Caisse, etc.).`;
 const httpErr = async r => { let m = ''; try { m = (await r.json())?.error?.message || ''; } catch { /* */ } return { status: r.status, msg: m }; };
 async function listModels(key) {
@@ -2347,7 +2398,7 @@ const gver = id => { const m = id.match(/gemini-(\d+(?:\.\d+)?)/); return m ? pa
 // 3.7 d'abord, puis 3.6, puis la plus haute version disponible (flash avant pro, stable avant préversion)
 const rankModels = (ids, pref) => [...new Set(ids)].sort((a, b) => sc(b, pref) - sc(a, pref));
 const sc = (id, pref) => (id === pref ? 1e7 : 0) + (/3\.7/.test(id) ? 5e5 : 0) + (/3\.6/.test(id) ? 4e5 : 0) + gver(id) * 1000 + (/lite/.test(id) ? 5 : /flash/.test(id) ? 30 : /pro/.test(id) ? 20 : 0) - (/preview|exp/.test(id) ? 3 : 0);
-const aiErrText = e => /API key|API_KEY|key not valid/i.test(e.msg) ? 'Clé API invalide : vérifiez-la dans Paramètres → Sons & appareil.' : e.status === 403 ? 'Clé refusée (403) : activez l\'API Generative Language pour cette clé, ou vérifiez ses restrictions.' : e.status === 429 ? 'Quota Gemini atteint : réessayez dans un instant.' : [500, 503].includes(e.status) ? 'Gemini est surchargé en ce moment : réessayez dans quelques secondes.' : `Service IA indisponible (${e.status}${e.msg ? ' : ' + e.msg.slice(0, 120) : ''})`;
+const aiErrText = e => /leaked|reported/i.test(e.msg) ? 'Google a BLOQUÉ cette clé (signalée comme divulguée). Créez une nouvelle clé gratuite sur aistudio.google.com/apikey, collez-la dans Paramètres → Sons & appareil, puis « Tester la connexion ».' : /expired/i.test(e.msg) ? 'Cette clé a expiré : créez-en une nouvelle sur aistudio.google.com/apikey.' : /API key|API_KEY|key not valid/i.test(e.msg) ? 'Clé API invalide : vérifiez-la dans Paramètres → Sons & appareil.' : e.status === 403 ? 'Clé refusée (403) : ' + (e.msg ? e.msg.slice(0, 140) + ' — ' : '') + 'créez une nouvelle clé sur aistudio.google.com/apikey (une clé affichée publiquement est bloquée par Google) ou retirez ses restrictions.' : e.status === 429 ? 'Quota Gemini atteint : réessayez dans un instant.' : [500, 503].includes(e.status) ? 'Gemini est surchargé en ce moment : réessayez dans quelques secondes.' : `Service IA indisponible (${e.status}${e.msg ? ' : ' + e.msg.slice(0, 120) : ''})`;
 async function callModel(key, model, contents, withCtx) {
   const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 70000);
   try {
@@ -2359,8 +2410,11 @@ async function callModel(key, model, contents, withCtx) {
     return { ok: true, text };
   } catch (e) { return { ok: false, status: 0, msg: e.name === 'AbortError' ? 'Délai dépassé' : 'Connexion impossible' }; } finally { clearTimeout(t); }
 }
+let aiDiag = [];
+const cleanKey = k => (k || '').replace(/^\s*(key\s*=\s*)?["']?/i, '').replace(/["']?\s*$/, '').replace(/\s+/g, '');
+const FALLBACKS = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite', 'gemini-pro-latest'];   // noms stables, essayés si la liste des modèles est indisponible
 async function askAI(q, test = false) {
-  const key = ls.get(AI_KEY); if (!key) return null;
+  const key = cleanKey(ls.get(AI_KEY)); if (!key) return null; aiDiag = [];
   const contents = test ? [{ role: 'user', parts: [{ text: q }] }] : [...aiHist.slice(-8), { role: 'user', parts: [{ text: q }] }], pref = ls.get(AI_PREF), cached = ls.get(AI_MODEL);
   const first = [...new Set([pref, cached].filter(Boolean))];
   let lastErr = null;
@@ -2370,20 +2424,26 @@ async function askAI(q, test = false) {
       let r = await callModel(key, m, contents, !test);
       if (!r.ok && [500, 503].includes(r.status)) { await new Promise(res => setTimeout(res, 1200)); r = await callModel(key, m, contents, !test); }   // une 2e chance si surcharge passagère
       if (r.ok) { ls.set(AI_MODEL, m); return r.text; }
-      lastErr = r;
-      if (r.status === 403 || /API key|API_KEY|key not valid/i.test(r.msg)) throw new Error(aiErrText(r));
+      lastErr = r; aiDiag.push({ model: m, status: r.status, msg: r.msg });
+      if (r.status === 403 || /API key|API_KEY|key not valid|leaked|expired/i.test(r.msg)) throw new Error(aiErrText(r));
     }
     return null;
   };
   let out = first.length ? await run(first) : null;
-  if (out == null) { let ids = []; try { ids = rankModels(await listModels(key), pref).filter(x => !first.includes(x)); } catch (e) { if (!lastErr) throw e; } out = await run(ids.slice(0, 8)); }
-  if (out == null) throw new Error(lastErr && ![404, 400].includes(lastErr.status) ? aiErrText(lastErr) : 'Aucun modèle Gemini compatible pour cette clé. Indiquez le nom du modèle dans Paramètres → Sons & appareil.');
+  if (out == null) {
+    let ids = []; try { ids = rankModels(await listModels(key), pref).filter(x => !first.includes(x)); } catch (e) { aiDiag.push({ model: '(liste des modèles)', status: 0, msg: e.message }); if (/Clé API invalide|Clé refusée|BLOQUÉ|expiré/.test(e.message)) throw e; }
+    ids = [...new Set([...ids.slice(0, 6), ...FALLBACKS])].filter(x => !first.includes(x));
+    out = await run(ids.slice(0, 10));
+  }
+  if (out == null) throw new Error(lastErr && lastErr.status !== 404 ? aiErrText(lastErr) : 'Aucun modèle Gemini compatible pour cette clé. Indiquez le nom du modèle dans Paramètres → Sons & appareil.');
   if (!test) { aiHist.push({ role: 'user', parts: [{ text: q }] }, { role: 'model', parts: [{ text: out }] }); aiHist = aiHist.slice(-12); }
   return out;
 }
+const diagHtml = () => aiDiag.length ? '<table class="tbl" style="width:100%;font-size:12px"><tr><th align="left">Modèle</th><th>Code</th><th align="left">Message</th></tr>' + aiDiag.map(d => `<tr><td>${esc(d.model)}</td><td align="center">${d.status || '—'}</td><td>${esc((d.msg || '').slice(0, 160))}</td></tr>`).join('') + '</table>' : '';
 A.aitest = async () => {
   toast('Test de Gemini en cours…');
-  try { await askAI('Réponds uniquement par le mot OK.', true); toast('Gemini connecté · modèle : ' + ls.get(AI_MODEL)); } catch (e) { toast(e.message, 'err'); }
+  try { await askAI('Réponds uniquement par le mot OK.', true); toast('Gemini connecté · modèle : ' + ls.get(AI_MODEL)); }
+  catch (e) { toast(e.message, 'err'); modal('Diagnostic Gemini', `<p><b>${esc(e.message)}</b></p>${diagHtml()}<p class="muted sm">Appareil : ${navigator.onLine ? 'en ligne' : 'HORS LIGNE'} · clé : ${cleanKey(ls.get(AI_KEY)).length} caractères (une clé Google en compte 39 et commence par « AIza »).</p>`); }
   if (S.route === 'settings') views.settings($('#view'));
 };
 const BIZ = /(idee|conseil|strateg|developp|entrepren|lancer|ouvrir|investi|business|commerc|marketing|concurren|augmenter|fidel|negoci|importer|exporter|pme|epargne|financ|rentab|promotion|client|embauch|recrut|croissance|petit|grand|entreprise|activite|projet|comment reussir|ameliorer)/;
@@ -2404,7 +2464,7 @@ A.assistant = () => {
     if (key && (BIZ.test(n) && !(local && /(combien|quel|quels|quelle|solde|dette|depens|ecart|commander|vendu|benefice|verifi)/.test(n)) || !local)) {
       const t = add('bot', '<i>Réflexion en cours…</i>');
       try { const r = await askAI(q); t.innerHTML = md(r) + '<p class="muted sm"><small>Réponse générée par IA (Gemini) — vérifiez les informations importantes.</small></p>'; sound('msg'); log.scrollTop = log.scrollHeight; return; }
-      catch (e) { t.innerHTML = esc(e.message) + (local ? '' : ''); if (!local) return; }
+      catch (e) { t.innerHTML = esc(e.message) + (aiDiag.length ? '<details><summary class="muted sm">Détails</summary>' + diagHtml() + '</details>' : ''); if (!local) return; }
     }
     add('bot', local || "Je n'ai pas trouvé de réponse fiable dans vos données. Pour des conseils business détaillés, ajoutez votre clé Gemini dans <b>Paramètres → Sons & appareil</b>. Sinon essayez : « produits les plus vendus », « combien ai-je dépensé cette semaine ? », « quels clients ont des dettes ? » ou « vérifie mes données ».");
     sound('msg');
@@ -2421,6 +2481,7 @@ let tab = 'general';
 const TABS = [['general', 'Général'], ['fin', 'Finances'], ['stock', 'Stock'], ['aff', 'Affichage'], ['sec', 'Sécurité'], ['mod', 'Modules'], ['notes', 'Sons & appareil'], ['bak', 'Sauvegarde']];
 const DEFCATS = [['VERRE', '🥛'], ['EKOLO', '🍺'], ['BLUEBAND', '🧈'], ['BOISSONS', '🥤'], ['WHISKY', '🥃'], ['BIÈRES', '🍻'], ['JUS', '🧃'], ['ALIMENTATION', '🛒'], ['PRODUITS LAITIERS', '🥛'], ['HUILES', '🛢️'], ['SUCRERIES', '🍬'], ['PRODUITS MÉNAGERS', '🧴'], ['AUTRES', '📦']];
 const save = (patch, label) => { const b = batch(); b.merge('meta', 'settings', patch); if (label) jr(b, 'Paramètres', label + ' par ' + who()); b.commit(); };
+const PURGE = [['sales', 'Ventes', 1], ['purchases', 'Achats', 1], ['expenses', 'Dépenses', 1], ['cashops,sessions', 'Caisse (opérations et sessions)', 1], ['inventories', 'Inventaires', 1], ['journal', 'Historique', 1], ['justifs', 'Justifications', 1], ['calcs,events,messages,polls,tickets', 'Calculs, calendrier, messages, sondages, signalements', 1], ['products', 'Produits', 0], ['clients', 'Clients (dettes comprises)', 0], ['suppliers', 'Fournisseurs (dettes comprises)', 0]];
 const chk = (name, label, on) => `<label class="chk"><input type="checkbox" name="${name}" ${on ? 'checked' : ''}> ${label}</label>`;
 
 views.settings = el => {
@@ -2459,6 +2520,10 @@ views.settings = el => {
       <small class="muted">Modèle utilisé : ${esc((() => { try { return localStorage.getItem('ksp_ai_model') || 'pas encore déterminé'; } catch { return '—'; } })())}</small></div></div>`;
   }
   if (tab === 'bak' && adm) body = `<div class="card"><h3>Sauvegarde complète</h3><p class="muted sm">Télécharge toutes les données (produits, ventes, caisse, journal…) en un fichier JSON. Faites-le régulièrement et conservez-le en lieu sûr. Les pièces jointes sont incluses.</p><button class="btn" data-act="backup">${ic('dl', 16)} Télécharger la sauvegarde</button></div>
+    <div class="card purge"><h3>Effacer les données de test</h3><p class="muted sm">Supprime <b>définitivement</b> les éléments cochés (sur tous les appareils). Votre compte administrateur, les utilisateurs et les paramètres sont conservés. <b>Les quantités en stock ne sont pas modifiées</b> : si vous effacez les ventes sans les produits, remettez les stocks à jour.</p>
+      <div id="pgl">${PURGE.map(([k, t, on]) => `<label class="chk"><input type="checkbox" data-pg="${k}" ${on ? 'checked' : ''}> ${t}</label>`).join('')}</div>
+      <label>Pour confirmer, tapez <b>EFFACER</b><input id="pgc" class="in" autocomplete="off" placeholder="EFFACER"></label>
+      <div class="row wrap"><button type="button" class="btn ghost sm" data-act="backup">${ic('dl', 16)} Sauvegarde d'abord</button><button type="button" class="btn red sm" data-act="purge">Effacer</button></div><small id="pgs" class="muted"></small></div>
     <div class="card"><h3>Installation</h3><p class="muted sm">Pour utiliser l'application comme une application native, installez-la depuis le menu du navigateur (« Ajouter à l'écran d'accueil »).</p></div>`;
   el.innerHTML = page('Paramètres', '', `<div class="chips">${TABS.filter(([k]) => adm || ['aff', 'notes'].includes(k)).map(([k, t]) => `<button class="chip ${tab === k ? 'on' : ''}" data-act="stab" data-k="${k}">${t}</button>`).join('')}</div>${body}`);
   $('#logof')?.addEventListener('change', async e => { try { const f = e.target.files[0]; if (f) { save({ logo: await resizeImage(f, 160) }, 'Logo modifié'); toast('Logo enregistré'); } } catch (err) { toast(err.message, 'err'); } });
@@ -2518,6 +2583,21 @@ A.permcam = async () => { try { const st = await navigator.mediaDevices.getUserM
 A.permgeo = () => navigator.geolocation ? navigator.geolocation.getCurrentPosition(() => pres('Position : autorisée'), () => pres('Position : refusée ou indisponible')) : pres('Position : indisponible');
 A.aisave = () => { const v = $('#aikey')?.value.trim(), mo = $('#aimodel')?.value.trim(); try { if (v) localStorage.setItem('ksp_ai_key', v); if (mo) localStorage.setItem('ksp_ai_pref', mo); else localStorage.removeItem('ksp_ai_pref'); localStorage.removeItem('ksp_ai_model'); toast('Enregistré sur cet appareil'); views.settings($('#view')); } catch { toast('Stockage local indisponible', 'err'); } };
 A.aidel = () => { try { localStorage.removeItem('ksp_ai_key'); localStorage.removeItem('ksp_ai_model'); } catch { /* */ } views.settings($('#view')); };
+
+A.purge = async () => {
+  if (!isAdmin()) return toast("Réservé à l'administrateur", 'err');
+  const cols = $$('[data-pg]:checked').flatMap(i => i.dataset.pg.split(','));
+  if (!cols.length) return toast('Cochez au moins un élément', 'err');
+  if ($('#pgc')?.value.trim().toUpperCase() !== 'EFFACER') return toast('Tapez EFFACER pour confirmer', 'err');
+  if (!await confirmBox('Effacer définitivement : <b>' + cols.length + ' catégorie(s) de données</b> ? Cette action est irréversible.', 'Oui, effacer')) return;
+  const st = $('#pgs'), btn = document.querySelector('[data-act="purge"]'); if (btn) btn.disabled = true;
+  try {
+    const n = await purgeCols(cols, (c, k) => { if (st) st.textContent = 'Effacement… ' + c + ' (' + k + ')'; });
+    const b = batch(); jr(b, 'Données effacées', who() + ' a effacé : ' + cols.join(', ') + ' (' + n + ' éléments)'); await b.commit();
+    toast('Terminé : ' + n + ' élément(s) effacé(s)'); if (st) st.textContent = '✔ ' + n + ' élément(s) effacé(s)';
+  } catch (e) { toast(e.code === 'permission-denied' ? 'Refusé : mettez à jour les règles Firestore (suppression admin)' : (e.message || String(e)), 'err'); if (st) st.textContent = ''; }
+  if (btn) btn.disabled = false;
+};
 
 }
 {
