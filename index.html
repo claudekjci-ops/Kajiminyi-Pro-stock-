@@ -298,6 +298,9 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%;touch-action:manipulati
 body{touch-action:manipulation}
 a,img,button{-webkit-user-drag:none;-webkit-touch-callout:none}
 
+[hidden]{display:none!important}
+.mpart h4{margin:14px 0 4px;color:var(--dg)}.mpart p{margin:0 0 6px;line-height:1.45}.mpart .hint{margin-top:6px}
+.mod>summary b{color:var(--dg)}
 </style>
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -772,21 +775,65 @@ function notify(title, body) {
   try { if ('Notification' in window && Notification.permission === 'granted') new Notification(title, { body, icon: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAIAAADdvvtQAAAEdUlEQVR42u3dSW7cMBAFUO9yn2xzpFws18jJZCDLBIG7JbJYwxP+0gAN1oNaojh8fPz4LnI/ukAAEoAEIAFIBCABSAASgEQAEoAEIAFIBCABSAASgEQAEoAEIAFIABIBSAASgAQgEYAEIAFIABIB6KX8+vlSdBRAb3BBCqD1YngaBCjMzUBJ3JAEUG46vRmhgxFAdej0Y4QORoMBlabTgxE6GM0D1FJPUUPoYDQG0BA9tQzRw9AAQAP1VDGEDkZ9AaGT39AEPdefK7jk6xsFKFjP9Z8rwM2uRgE6rmcfo6AWAcqgZ7mh0BYByqBnYUXjWwRoF6DrzSu+xTWGAMpw+3lezuvW1eom1OylfRCgJIZaDvnElPO6e7UaHGo23BxWzuvB1WqQGqBgPQCl/toVUM7r8dXqS1mzb6W7y3mtuFp9bQWog56JgGK/ZT6vaGo9Bw0BFKYHoAIzxXYUtYaeU4YA6vDjNQvQiflct0tbSc8RQwC10tMfUMhM5CUFLqkn3hBA3fR0BhS1FuJhmWvrCTYEUEM9PQEFrsa6Xexseq7f3/5KOkMAnR0w/JfIKwEoHaAAPfesABS6yv0soBg9uQwBFPPoA1BbQBX1DAMUvidGKj3Hbj8xhgAKeOcCCKDH02EBAujpcg6AANr6sQKg8/scTgCU67sYQJ1vPwAlBHRWD0C1AR3XA1BhQLv+Z4AmAKqqpzag8Jl4vfXcBLTVEECF9ABUD9DGfxWg9oCy6QEIoBN6AOoE6BUlAHkGuq8HIG9hNwF9+WcAjR4Hev0RZ7EegBoAevcBGaBWgJ4eqXHr9WoNHYAafEzd9XIO0ITpHBtHd/oDGj+hrLkegM4u5emwVxBAGze3z6AHoKKrMrLoAajiwsIsP14AVVzanEtPeUDD1sbP0gPQckO59ABUa3+gdLcfgKpscZdUD0CVNtlMqKcJoCG7tA7UA9DijcYBmgxok6HmJ2bYqX79e9wcPQDtOu7puB6AqgOacuKT88I2DUg6L2w0oPKGnJna49RmZ6aOBlTVkHPjAXJufBNA9Qz1B7TT0K7jdqoYii8lQGEzjQAqYGjvOq/kho7UESCAagLaY2j7UuW0hk4VEaD4adcA5TUUtOFGNkAHK3gY0GpDYeVMBOhs+QACqDigpYZC9x3LAOh47VIAWmcoevPDs4AyFC4LoEWG4st5DFCSqiUCtMLQmQ2g4xvNU7JmgN4tZ9EWAUphKP7hvZuejICiDMWPYTbUkxTQZkNHZrT11JMX0IbBoSOb7bUa8ikG6MRG93mTtkapATGUXE8BQMMZ5S9NDUAzDZWoSxlA0wxVKUolQHMMFapIMUDtGZWrRUlAXQ1VLERVQM0Y1S1BbUANGFXv/A6AijLq0e19ABVi1KnDuwFKzqhfV/cElJBR107uDCiDpPZ9OwJQvKQ5XToL0D5PY/twNKDbpHQUQAKQACQACUAiAAlAApAAJAKQACQACUAiAAlAApAAJAKQACQACUAiukAAEoAEIAFIBCABSAASgES+yifLn6wGz/NnCwAAAABJRU5ErkJggg==' }); } catch { /* ignoré */ }
 }
 
+/* ---------- recherche : accents, plusieurs mots, codes partiels, fautes de frappe ---------- */
+const fold = s => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+const lev1 = (a, b) => {   // une faute au plus : lettre en trop, manquante, différente ou deux lettres inversées
+  if (a === b) return true; const la = a.length, lb = b.length; if (Math.abs(la - lb) > 1) return false;
+  let i = 0, j = 0, d = 0;
+  while (i < la && j < lb) { if (a[i] === b[j]) { i++; j++; continue; } if (la === lb && a[i] === b[j + 1] && a[i + 1] === b[j] && a.slice(i + 2) === b.slice(j + 2)) return true; if (++d > 1) return false; if (la > lb) i++; else if (lb > la) j++; else { i++; j++; } }
+  return d + (la - i) + (lb - j) <= 1;
+};
+const qTokens = q => fold(q).split(/[\s,;]+/).filter(Boolean);
+const tokIn = (hay, t) => hay.includes(t) || (/^\d+$/.test(t) && t.replace(/^0+/, '').length >= 4 && hay.includes(t.replace(/^0+/, '')));
+const fuzzIn = (hay, t) => { if (hay.includes(t)) return true; if (t.length < 4 || /\d/.test(t)) return false; return hay.split(/[^a-z0-9]+/).some(w => w.length >= 3 && (lev1(w, t) || (w.length > t.length && lev1(w.slice(0, t.length), t)))); };
+// masque les éléments qui ne correspondent pas ; 1re passe stricte, 2e passe tolérante aux fautes si rien n'est trouvé
+function filterRows(els, q, hayOf) {
+  const toks = qTokens(q); let n = 0;
+  els.forEach(e => { const ok = toks.every(t => tokIn(hayOf(e), t)); e.hidden = !ok; if (ok) n++; });
+  if (!n && toks.length) els.forEach(e => { const h = hayOf(e), ok = toks.every(t => tokIn(h, t) || fuzzIn(h, t)); e.hidden = !ok; if (ok) n++; });
+  return n;
+}
+const textMatch = (hay, q) => { const toks = qTokens(q); return toks.every(t => tokIn(hay, t)) || toks.every(t => tokIn(hay, t) || fuzzIn(hay, t)); };
 /* filtre de liste générique : <input data-filter="#cible"> + éléments [data-s] */
 document.addEventListener('input', e => {
   const t = e.target.closest?.('[data-filter]'); if (!t) return;
-  const q = t.value.toLowerCase();
-  $$(t.dataset.filter + ' [data-s]').forEach(r => { r.hidden = !r.dataset.s.includes(q); });
+  filterRows($$(t.dataset.filter + ' [data-s]'), t.value, el => el._f ??= fold(el.dataset.s));
 });
 
-
-/* ---------- code-barres : recherche tolérante + scanner ---------- */
-function findByCode(code) {
-  const c = String(code || '').trim().toLowerCase(); if (!c) return null;
-  const n = c.replace(/^0+/, '');
-  return S.products.find(p => (p.barcode && String(p.barcode).trim().toLowerCase() === c) || (p.code && String(p.code).trim().toLowerCase() === c))
-    || (/^\d+$/.test(c) ? S.products.find(p => p.barcode && /^\d+$/.test(String(p.barcode).trim()) && String(p.barcode).trim().replace(/^0+/, '') === n) : null) || null;
+/* ---------- code-barres : normalisation, correspondances alternatives, recherche ---------- */
+// nettoyage léger (valeur enregistrée) : espaces, retours du scanner, préfixe de symbologie ]E0, « .0 » laissé par un import Excel
+const cleanCode = c => String(c ?? '').normalize('NFKC').replace(/[\u0000-\u001f\u007f\s]/g, '').replace(/^\][A-Za-z][0-9A-Za-z]/, '').replace(/^(\d+)\.0+$/, '$1');
+// forme de comparaison : sans tirets/apostrophes, majuscules
+const normCode = c => cleanCode(c).replace(/[-_'’"]/g, '').toUpperCase();
+const eanOk = c => {   // somme de contrôle EAN-8 / UPC-A / EAN-13 / GTIN-14 (true si format non concerné)
+  if (!/^\d+$/.test(c) || ![8, 12, 13, 14].includes(c.length)) return true;
+  const d = c.split('').map(Number), chk = d.pop(), s = d.reverse().reduce((tt, x, i) => tt + x * (i % 2 ? 1 : 3), 0);
+  return (10 - s % 10) % 10 === chk;
+};
+const codeKeys = c => { const n = normCode(c); if (!n) return []; const k = [n]; if (/^\d+$/.test(n)) { const s = n.replace(/^0+/, ''); if (s) k.push('#' + s); } return k; };
+// partie « article » d'un GTIN : permet de rapprocher un carton/lot (GTIN-14) de son unité (EAN-13)
+const innerGtin = n => { if (!/^\d+$/.test(n)) return ''; if (n.length === 14 && n[0] !== '0') return n.slice(1, 13); const s = n.replace(/^0+/, ''); return s.length <= 13 ? s.padStart(13, '0').slice(0, 12) : ''; };
+// lvl 1 = code identique après normalisation (UPC-A ≙ EAN-13, zéros initiaux…) ; lvl 2 = correspondance alternative (emballage / lot)
+function codeMatches(code) {
+  const n = normCode(code); if (!n) return [];
+  const ks = new Set(codeKeys(n)), inner = innerGtin(n), out = [];
+  S.products.forEach(p => {
+    let lvl = 0;
+    for (const x of [p.barcode, p.code, ...(p.barcodes || [])]) {
+      if (x == null || x === '') continue;
+      if (codeKeys(x).some(k => ks.has(k))) { lvl = 1; break; }
+      const nx = normCode(x); if (inner && /^\d+$/.test(nx) && nx.length !== n.length && innerGtin(nx) === inner) lvl = 2;
+    }
+    if (lvl) out.push({ p, lvl });
+  });
+  return out.sort((a, b) => a.lvl - b.lvl);
 }
+const findByCode = code => codeMatches(code).find(m => m.lvl === 1)?.p || null;
+const looksLikeCode = q => /^[\w\- ]{6,30}$/.test(String(q).trim()) && (String(q).match(/\d/g) || []).length >= 5;
+const codeVariants = c => { const n = normCode(c); if (!/^\d+$/.test(n)) return [n]; const s = n.replace(/^0+/, ''), v = [n]; for (const L of [13, 12, 8, 14]) if (s.length <= L && s.padStart(L, '0') !== n) v.push(s.padStart(L, '0')); return [...new Set(v)].slice(0, 3); };
+// texte indexé d'un produit pour la recherche (nom, codes, marque, catégorie, fournisseur, unités…)
+const pHay = p => fold([p.name, p.code, p.barcode, ...(p.barcodes || []), p.brand, p.quality, catName(p.cat), S.suppliers.find(s => s.id === p.supplierId)?.name, p.unit, ...(p.units || []).map(u => u.name),
+  ...codeKeys(p.barcode).filter(k => k[0] === '#').map(k => k.slice(1))].filter(x => x != null && x !== '').join(' '));
 let zxP;
 const loadZX = () => zxP ??= new Promise((ok, ko) => { if (window.ZXing) return ok(); const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js'; sc.onload = ok; sc.onerror = () => { zxP = null; ko(new Error('zxing')); }; document.head.appendChild(sc); });
 // Scanner : BarcodeDetector (formats explicites, HD, mise au point continue, lampe) ou ZXing en secours ; saisie manuelle toujours possible
@@ -956,21 +1003,27 @@ views.sales = el => {
     <label class="sbox">${ic('search', 18)}<input id="sq" placeholder="Rechercher un produit ou scanner un code-barres…" value="${esc(sq)}" autocomplete="off"></label>
     <div class="chips"><button class="chip ${!scat ? 'on' : ''}" data-act="scat" data-c="">Tout</button>${S.categories.map(c => `<button class="chip ${scat === c.id ? 'on' : ''}" data-act="scat" data-c="${c.id}">${esc(c.icon || '')} ${esc(c.name)}</button>`).join('')}</div>
     <div class="plist" id="pgrid">${S.products.map(p => { const blocked = !sellable(p), st = stockState(p);
-      return `<div class="pcard prow ${p.qty <= 0 || blocked ? 'out' : ''}" data-act="addcart" data-id="${p.id}" data-c="${p.cat}" data-s="${esc([p.name, p.code, p.barcode, p.brand].join(' ').toLowerCase())}">
+      return `<div class="pcard prow ${p.qty <= 0 || blocked ? 'out' : ''}" data-act="addcart" data-id="${p.id}" data-c="${p.cat}" data-s="${esc(pHay(p))}">
       ${p.photo ? `<img src="${p.photo}" alt="">` : `<div class="ph-ic">${esc((p.name || '?')[0])}</div>`}<div class="pi"><b>${esc(p.name)}</b><small>${usd(p.sell)} / ${esc(p.unit)} · <span class="${st === 'ok' ? 'muted' : st === 'faible' ? '' : 'neg'}">${blocked ? (p.suspended ? 'Vente suspendue' : 'Expiré') : fmtQty(p)}</span></small></div><span class="plus">${ic('plus', 20)}</span></div>`; }).join('') || '<p class="muted">Aucun produit. Ajoutez-en dans « Produits ».</p>'}</div>
+    <div id="pnores" class="card" hidden><p class="muted">Aucun produit ne correspond à cette recherche.</p><button class="btn ghost sm" data-act="sunknown" hidden>Code inconnu : associer à un produit ou créer la fiche</button></div>
     <div class="sfoot"><span>Total : <b>${usd(tot)}</b></span><button class="btn big" data-act="opencart" ${cart.length ? '' : 'disabled'}>${ic('cart')} Valider la vente${cart.length ? ' (' + cart.length + ')' : ''}</button></div>`);
   applyGrid();
 };
 function applyGrid() {
-  const q = sq.toLowerCase();
-  $$('#pgrid .pcard').forEach(c => { c.hidden = !((!scat || c.dataset.c === scat) && (!q || c.dataset.s.includes(q))); });
+  const cards = $$('#pgrid .pcard'), inCat = cards.filter(c => !scat || c.dataset.c === scat);
+  cards.forEach(c => { c.hidden = true; });
+  const n = filterRows(inCat, sq, c => c._f ??= fold(c.dataset.s));
+  const z = $('#pnores'); if (z) { z.hidden = n > 0 || !cards.length; const b = z.querySelector('[data-act=sunknown]'); if (b) b.hidden = !looksLikeCode(sq); }
 }
 document.addEventListener('input', e => { if (e.target.id === 'sq') { sq = e.target.value; applyGrid(); } });
 document.addEventListener('keydown', e => {
-  if (e.target.id === 'sq' && e.key === 'Enter') {
-    const p = findByCode(e.target.value);
-    if (p) { A.addcart({ id: p.id }); e.target.value = ''; sq = ''; applyGrid(); }
-  }
+  if (e.target.id !== 'sq' || e.key !== 'Enter') return;
+  const q = e.target.value.trim(); if (!q) return;
+  const p = findByCode(q);
+  if (p) { sq = ''; A.addcart({ id: p.id }); return; }
+  const vis = $$('#pgrid .pcard:not([hidden])');
+  if (vis.length === 1) { sq = ''; A.addcart({ id: vis[0].dataset.id }); return; }
+  if (!vis.length && looksLikeCode(q)) addByCode(q);
 });
 A.stab = d => { stab = d.t; views.sales($('#view')); };
 A.scat = d => { scat = d.c; $$('[data-act="scat"]').forEach(b => b.classList.toggle('on', b.dataset.c === scat)); applyGrid(); };
@@ -986,11 +1039,17 @@ A.addcart = d => {
   views.sales($('#view'));
 };
 A.opencart = () => openCart();
-A.scan = () => scanCode(code => {
+// code scanné ou saisi : produit trouvé (formats normalisés) → panier ; code d'emballage proche → confirmation ; inconnu → association / création rapide
+function addByCode(code) {
   const p = findByCode(code);
-  if (p) { A.addcart({ id: p.id }); return true; }
-  toast('Code ' + code + ' inconnu', 'err'); return false;
-}, { title: 'Scanner un code-barres' });
+  if (p) { A.addcart({ id: p.id }); return; }
+  const alt = codeMatches(code).find(m => m.lvl === 2);
+  const unknown = () => hooks.unknownCode(code, q => { sq = ''; A.addcart({ id: q.id }); });
+  if (alt) { confirmBox(`Ce code ressemble à un emballage ou lot de <b>${esc(alt.p.name)}</b>. Ajouter ce produit à la vente ?`, 'Ajouter').then(ok => { if (ok) A.addcart({ id: alt.p.id }); else unknown(); }); return; }
+  unknown();
+}
+A.sunknown = () => addByCode(sq.trim());
+A.scan = () => scanCode(code => { addByCode(code); return true; }, { title: 'Scanner un code-barres' });
 
 function openCart() {
   const w = modal('Panier', '<div id="cartbody"></div>', { wide: true });
@@ -1143,18 +1202,51 @@ const STATE = { ok: ['', 'OK'], faible: ['warn', 'Faible'], rupture: ['bad', 'Ru
 /* ================= PRODUITS ================= */
 const sellTxt = p => money(p.sellAmt ?? p.sell, p.sellCur || 'USD');
 const buyTxt = p => money(p.buyAmt ?? p.buy, p.buyCur || 'USD');
+const pf = { st: '', cat: '', sup: '', sort: 'name', q: '' };
+const PF_ST = [['', 'Tous'], ['ok', 'En stock'], ['faible', 'Stock faible'], ['rupture', 'Rupture'], ['exp', 'Expire / expiré'], ['susp', 'Suspendus'], ['nocode', 'Sans code-barres']];
+const pfMatch = (p, k = pf.st) => k === 'ok' ? stockState(p) === 'ok' : k === 'faible' ? stockState(p) === 'faible' : k === 'rupture' ? stockState(p) === 'rupture' : k === 'exp' ? ['soon', 'expired'].includes(expState(p)) : k === 'susp' ? !!p.suspended : k === 'nocode' ? !p.barcode : true;
+const PF_SORT = { name: ['Nom (A → Z)', (a, b) => a.name.localeCompare(b.name)], stock: ['Stock croissant', (a, b) => a.qty - b.qty], stockd: ['Stock décroissant', (a, b) => b.qty - a.qty], price: ['Prix de vente décroissant', (a, b) => b.sell - a.sell], recent: ['Plus récents', (a, b) => (b.ts || 0) - (a.ts || 0)] };
 views.products = el => {
-  const rows = [...S.products].sort((a, b) => a.name.localeCompare(b.name));
-  el.innerHTML = page('Produits', `<button class="btn" data-act="pform">${ic('plus')} Nouveau</button>`, `
-    <label class="sbox">${ic('search', 18)}<input data-filter="#plist" placeholder="Rechercher un produit, code, marque, catégorie…"></label>
+  const rows = S.products.filter(p => pfMatch(p) && (!pf.cat || p.cat === pf.cat) && (!pf.sup || (pf.sup === '__none' ? !p.supplierId : p.supplierId === pf.sup))).sort(PF_SORT[pf.sort]?.[1] || PF_SORT.name[1]);
+  el.innerHTML = page('Produits', `<button class="btn ghost" data-act="pscanfind">${ic('scan', 16)} Scanner</button><button class="btn" data-act="pform">${ic('plus')} Nouveau</button>`, `
+    <label class="sbox">${ic('search', 18)}<input id="pq" placeholder="Nom, code, code-barres (même partiel), marque, catégorie…" value="${esc(pf.q)}" autocomplete="off" enterkeyhint="search"></label>
+    <div class="chips">${PF_ST.map(([k, tt]) => `<button class="chip ${pf.st === k ? 'on' : ''}" data-act="pfst" data-k="${k}">${tt} (${S.products.filter(p => pfMatch(p, k)).length})</button>`).join('')}</div>
+    <details class="card"><summary><b>Plus de filtres</b> (catégorie, fournisseur, tri)</summary><div class="frm" style="margin-top:10px"><div class="two">
+      <label>Catégorie<select data-pflt="cat"><option value="">Toutes</option>${S.categories.map(c => `<option value="${c.id}" ${pf.cat === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
+      <label>Fournisseur<select data-pflt="sup"><option value="">Tous</option><option value="__none" ${pf.sup === '__none' ? 'selected' : ''}>Sans fournisseur</option>${S.suppliers.map(s => `<option value="${s.id}" ${pf.sup === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label></div>
+      <label>Trier par<select data-pflt="sort">${Object.entries(PF_SORT).map(([k, [n]]) => `<option value="${k}" ${pf.sort === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div></details>
+    <p class="muted sm" id="pcount"></p>
     <div class="llist" id="plist">${rows.map(p => { const st = STATE[stockState(p)], ex = expState(p), dec = fmtDec(p);
-      return `<div class="lrow" data-s="${esc([p.name, p.code, p.barcode, p.brand, catName(p.cat)].join(' ').toLowerCase())}">
+      return `<div class="lrow" data-s="${esc(pHay(p))}">
       ${p.photo ? `<img class="th" src="${p.photo}" alt="">` : `<div class="ph-ic th">${esc(p.name[0])}</div>`}
-      <div class="jm"><b>${esc(p.name)}</b><small>${esc(catName(p.cat))}${p.brand ? ' · ' + esc(p.brand) : ''}${p.quality ? ' · ' + esc(p.quality) : ''} · ${esc(p.code || '')}</small>
+      <div class="jm"><b>${esc(p.name)}</b><small>${esc(catName(p.cat))}${p.brand ? ' · ' + esc(p.brand) : ''}${p.quality ? ' · ' + esc(p.quality) : ''} · ${esc(p.code || '')}${p.barcode ? '' : ' · <span class="neg">sans code-barres</span>'}</small>
         <small><span class="badge ${st[0]}">${fmtQty(p)}</span>${dec ? ` <span class="muted">≈ ${dec}</span>` : ''} ${ex === 'expired' ? '<span class="badge bad">Expiré</span>' : ex === 'soon' ? `<span class="badge warn">Expire ${daysTo(p.exp)} j</span>` : ''} ${p.suspended ? '<span class="badge gray">Vente suspendue</span>' : ''}</small></div>
       <div class="jr"><b>${sellTxt(p)}</b><small>achat ${buyTxt(p)}</small></div>
-      <div class="ac"><button data-act="pform" data-id="${p.id}" title="Modifier">${ic('edit')}</button>${isMgr() ? `<button class="del" data-act="pdel" data-id="${p.id}" title="Supprimer">${ic('trash')}</button>` : ''}</div></div>`; }).join('') || '<p class="muted">Aucun produit. Appuyez sur « Nouveau ».</p>'}</div>`);
+      <div class="ac"><button data-act="pform" data-id="${p.id}" title="Modifier">${ic('edit')}</button>${isMgr() ? `<button class="del" data-act="pdel" data-id="${p.id}" title="Supprimer">${ic('trash')}</button>` : ''}</div></div>`; }).join('') || '<p class="muted">Aucun produit pour ces filtres.</p>'}</div>
+    <div id="pzero" class="card" hidden><p class="muted">Aucun produit trouvé. Essayez un autre mot ou un morceau du code-barres.</p><button class="btn ghost sm" data-act="pqunknown" hidden>Code inconnu : associer à un produit ou créer la fiche</button></div>`);
+  applyPQ();
 };
+function applyPQ() {
+  const els = $$('#plist .lrow'), n = filterRows(els, pf.q, e => e._f ??= fold(e.dataset.s)), c = $('#pcount'), z = $('#pzero');
+  if (c) c.textContent = (pf.q.trim() ? n + ' résultat(s)' : els.length + ' produit(s)') + ' · ' + S.products.length + ' au total';
+  if (z) { z.hidden = n > 0 || !els.length; const b = z.querySelector('[data-act=pqunknown]'); if (b) b.hidden = !looksLikeCode(pf.q); }
+}
+document.addEventListener('input', e => { if (e.target.id === 'pq') { pf.q = e.target.value; applyPQ(); } });
+document.addEventListener('keydown', e => {
+  if (e.target.id !== 'pq' || e.key !== 'Enter') return;
+  const q = pf.q.trim(); if (!q) return;
+  const m = findByCode(q); if (m) { A.pform({ id: m.id }); return; }
+  const vis = $$('#plist .lrow:not([hidden])'); if (vis.length === 1) { vis[0].querySelector('[data-act=pform]')?.click(); return; }
+  if (!vis.length && looksLikeCode(q)) hooks.unknownCode(q, p => A.pform({ id: p.id }));
+});
+document.addEventListener('change', e => { const k = e.target.dataset?.pflt; if (k) { pf[k] = e.target.value; views.products($('#view')); } });
+A.pfst = d => { pf.st = d.k; views.products($('#view')); };
+A.pqunknown = () => hooks.unknownCode(pf.q.trim(), p => A.pform({ id: p.id }));
+A.pscanfind = () => scanCode(code => {
+  const m = findByCode(code); if (m) { A.pform({ id: m.id }); return true; }
+  hooks.unknownCode(code, p => A.pform({ id: p.id })); return true;
+}, { title: 'Scanner pour trouver un produit' });
+
 
 const urow = (u = {}, p = {}) => `<div class="urow"><input list="unames" placeholder="Unité (Carton…)" class="u-n" value="${esc(u.name || '')}"><input type="number" step="any" min="0" placeholder="Contient (en ${esc(p.unit || 'base')})" class="u-f" value="${u.factor || ''}"><button type="button" class="x" data-act="delrow">✕</button>
   <input type="number" step="any" min="0" placeholder="Prix de vente (facultatif)" class="u-s" value="${u.priceAmt ?? (u.price || '')}"><input type="number" step="any" min="0" placeholder="Prix d'achat (facultatif)" class="u-b" value="${u.buyAmt ?? ''}"></div>`;
@@ -1163,7 +1255,7 @@ A.addurow = () => $('#urows')?.insertAdjacentHTML('beforeend', urow());
 
 A.pform = d => {
   if (!S.categories.length) return toast("Créez d'abord une catégorie", 'err');
-  const mc = mcur(), p = d.id ? S.products.find(x => x.id === d.id) : { unit: 'Pièce', units: [], min: 5, cat: S.categories[0]?.id, buyCur: mc, sellCur: mc };
+  const mc = mcur(), p = d.id ? S.products.find(x => x.id === d.id) : { unit: 'Pièce', units: [], min: 5, cat: S.categories[0]?.id, buyCur: mc, sellCur: mc, ...(d.barcode ? { barcode: d.barcode } : {}), ...(d.name ? { name: d.name } : {}), ...(d.brand ? { brand: d.brand } : {}) };
   const bc = p.buyCur || 'USD', sc = p.sellCur || 'USD';
   const units = (p.units || []).filter(u => u.factor > 1), big = [...units].sort((a, b) => b.factor - a.factor)[0] || null, extras = units.filter(u => u !== big);
   form(d.id ? 'Modifier le produit' : 'Nouveau produit', `
@@ -1174,6 +1266,7 @@ A.pform = d => {
     ${d.id ? `<p class="muted sm">ID technique : ${esc(p.id)} · Enregistré le ${p.ts ? fmtDate(p.ts) : '—'}${p.createdBy ? ' par ' + esc(p.createdBy) : ''}</p>` : '<p class="muted sm">La date d\'enregistrement et l\'identifiant technique sont créés automatiquement.</p>'}
     ${fld('Nom du produit', 'name', p.name || '', 'text', 'required')}
     <div class="two">${fld('Identifiant produit (code)', 'code', p.code || '', 'text', 'placeholder="Auto si vide"')}<label>Code-barres<span class="row" style="flex-wrap:nowrap"><input name="barcode" value="${esc(p.barcode || '')}" inputmode="numeric" placeholder="Scanner ou saisir" style="flex:1;min-width:0"><button type="button" class="btn ghost sm" data-act="pscan" aria-label="Scanner">${ic('scan', 18)}</button></span></label></div>
+    ${(p.barcodes || []).length ? `<p class="muted sm">Autres codes-barres associés : ${p.barcodes.map(esc).join(', ')}</p>` : ''}
     <div class="two">${sel('Catégorie', 'cat', S.categories.map(c => [c.id, c.name]), p.cat)}${fld('Marque', 'brand', p.brand || '')}</div>
     <label>Qualité<input name="quality" list="qlist" value="${esc(p.quality || '')}" placeholder="Premium, Standard, Économique…"><datalist id="qlist"><option>Premium</option><option>Standard</option><option>Économique</option><option>Importé</option><option>Local</option></datalist></label>
     ${sel('Fournisseur', 'supplierId', [['', '— Aucun —'], ...S.suppliers.map(s => [s.id, s.name])], p.supplierId || '')}
@@ -1202,8 +1295,8 @@ A.pform = d => {
       const name = v.name.trim(); if (!name) throw new Error('Nom requis');
       const code = (v.code || '').trim() || 'P' + String(S.products.length + 1).padStart(4, '0');
       if (S.products.some(x => x.id !== d.id && x.code && x.code.toLowerCase() === code.toLowerCase())) throw new Error('Ce code produit existe déjà');
-      const bcode = v.barcode.trim();
-      if (bcode && S.products.some(x => x.id !== d.id && x.barcode === bcode)) throw new Error('Ce code-barres est déjà utilisé par un autre produit');
+      const bcode = cleanCode(v.barcode), dup = bcode && codeMatches(bcode).find(m => m.lvl === 1 && m.p.id !== d.id);
+      if (dup) throw new Error('Ce code-barres est déjà utilisé par : ' + dup.p.name);
       if (v.mfg && v.exp && v.exp < v.mfg) throw new Error("La date d'expiration précède la date de fabrication");
       const bn = v.bigName.trim(), bf = num(v.bigF);
       if (bn && !(bf > 1)) throw new Error(`Indiquez combien de pièces contient 1 ${bn} (au moins 2)`);
@@ -1356,7 +1449,7 @@ A.invview = d => {
 
 // Scan du code-barres directement dans la fiche produit
 // Recherche du nom d'un produit par son code-barres (base ouverte Open Food Facts, couvre surtout l'alimentation et les boissons)
-async function nameFromCode(code) {
+async function nameFromCode1(code) {
   const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 7000);
   try {
     const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,product_name_fr,generic_name,brands,quantity`, { signal: ctl.signal });
@@ -1366,22 +1459,56 @@ async function nameFromCode(code) {
     return { name: q && !n.toLowerCase().includes(q.toLowerCase()) ? n + ' ' + q : n, brand: (p.brands || '').split(',')[0].trim() };
   } catch { return null; } finally { clearTimeout(t); }
 }
+async function nameFromCode(code) {   // essaie le code puis ses variantes (EAN-13 / UPC-A / zéros initiaux)
+  for (const c of codeVariants(code)) { const r = await nameFromCode1(c); if (r) return r; }
+  return null;
+}
 async function fillFromCode(code) {
   const f = document.querySelector('.modal-wrap form'); if (!f || !code) return;
-  const other = S.products.find(x => x.barcode === code && x.id !== (f.dataset.pid || ''));
-  if (other) return toast('Code ' + code + ' déjà utilisé par : ' + other.name, 'err');
+  code = cleanCode(code); const inp = f.querySelector('input[name=barcode]'); if (inp && inp.value !== code) inp.value = code;
+  const other = codeMatches(code).find(m => m.lvl === 1 && m.p.id !== (f.dataset.pid || ''));
+  if (other) return toast('Code ' + code + ' déjà utilisé par : ' + other.p.name, 'err');
   const nm = f.querySelector('input[name=name]'), br = f.querySelector('input[name=brand]'); if (!nm || nm.value.trim()) return toast('Code lu : ' + code);
+  if (!eanOk(normCode(code))) toast('Attention : ce code semble mal lu (somme de contrôle invalide)');
   toast('Code lu : ' + code + ' — recherche du nom…');
   const r = await nameFromCode(code), g = document.querySelector('.modal-wrap form');
   if (g !== f) return;
   if (r && !nm.value.trim()) { nm.value = r.name; if (br && !br.value.trim() && r.brand) br.value = r.brand; toast('Nom trouvé : ' + r.name); }
-  else toast('Nom introuvable pour ce code (ou pas de connexion) : saisissez-le', 'err');
+  else toast('Code enregistré : ' + code + '. Aucun nom trouvé en ligne : saisissez simplement le nom du produit.');
 }
 A.pscan = () => scanCode(code => {
   const inp = document.querySelector('.modal-wrap form input[name=barcode]');
   if (inp) { inp.value = code; inp.dispatchEvent(new Event('input', { bubbles: true })); }
   fillFromCode(code);
 }, { title: 'Scanner le code-barres du produit' });
+// Code inconnu : au lieu de bloquer, associer le code à un produit existant ou créer la fiche (nom cherché en ligne)
+hooks.unknownCode = (code, onPick) => {
+  const c = cleanCode(code); if (!c) return;
+  const canEdit = can('products'), okSum = eanOk(normCode(c)); let online = null;
+  const w = modal('Code non référencé', `<div class="hint"><b>${esc(c)}</b> ne correspond à aucun produit de votre catalogue.${okSum ? '' : '<br>⚠ Ce code semble mal lu (somme de contrôle invalide) : rescannez-le avant de l’enregistrer.'}</div>
+    <p class="muted sm" id="ucon">Recherche du nom en ligne…</p>
+    <p><b>1. Le produit existe déjà dans mon catalogue</b><br><small class="muted">Retrouvez-le : le code lui sera associé pour les prochains scans.</small></p>
+    <label class="sbox">${ic('search', 18)}<input id="ucq" placeholder="Nom, marque, code…" autocomplete="off"></label><div class="llist" id="ucl"></div>
+    <p><b>2. C’est un nouveau produit</b></p>
+    ${canEdit ? `<div class="row end"><button class="btn" id="uccreate">${ic('plus', 16)} Créer la fiche avec ce code</button></div>` : '<p class="muted sm">Seul un responsable (gestion des produits) peut créer la fiche. Vous pouvez quand même choisir le produit ci-dessus pour cette opération.</p>'}`);
+  const paint = () => {
+    const q = $('#ucq', w).value, L = S.products.filter(p => !q.trim() || textMatch(pHay(p), q)).sort((a, b) => (!!a.barcode - !!b.barcode) || a.name.localeCompare(b.name)).slice(0, 8);
+    $('#ucl', w).innerHTML = L.map(p => `<div class="lrow"><div class="jm"><b>${esc(p.name)}</b><small>${esc(catName(p.cat))}${p.brand ? ' · ' + esc(p.brand) : ''} · ${p.barcode ? 'code : ' + esc(p.barcode) : '<span class="neg">sans code-barres</span>'}</small></div><div class="ac"><button class="btn sm" data-uc="${p.id}">Choisir</button></div></div>`).join('') || '<p class="muted sm">Aucun produit trouvé : essayez un autre mot.</p>';
+  };
+  paint(); $('#ucq', w).addEventListener('input', paint);
+  w.addEventListener('click', e => {
+    const bt = e.target.closest('[data-uc]'); if (!bt) return; const p = S.products.find(x => x.id === bt.dataset.uc); if (!p) return;
+    if (canEdit) {
+      const b = batch(), up = { updated: Date.now(), updatedBy: who() }; if (!p.barcode) up.barcode = c; else up.barcodes = union(c);
+      b.upd('products', p.id, up); jr(b, 'Modification produit', `Code-barres ${c} associé à ${p.name}${p.barcode ? ' (code principal : ' + p.barcode + ')' : ''} par ${who()}`, null, '', catName(p.cat), p.id); b.commit();
+      if (!p.barcode) p.barcode = c; else (p.barcodes ||= []).push(c);
+      toast('Code associé à ' + p.name);
+    } else toast('Code utilisé pour cette opération seulement : un responsable doit l’associer au produit');
+    w.close(); onPick?.(p);
+  });
+  $('#uccreate', w)?.addEventListener('click', () => { w.close(); A.pform({ barcode: c, name: online?.name || '', brand: online?.brand || '' }); });
+  nameFromCode(c).then(r => { const el = $('#ucon', w); if (!el || !document.body.contains(w)) return; online = r; el.innerHTML = r ? `Nom trouvé en ligne : <b>${esc(r.name)}</b>${r.brand ? ' (' + esc(r.brand) + ')' : ''}` : 'Aucun nom trouvé en ligne pour ce code : ce n’est pas bloquant, choisissez un produit ou saisissez le nom.'; });
+};
 // code-barres tapé à la main : même recherche à la sortie du champ
 document.addEventListener('change', e => { const t = e.target; if (t?.name === 'barcode' && t.closest('.modal-wrap form') && t.value.trim().length >= 8) fillFromCode(t.value.trim()); });
 
@@ -2539,25 +2666,142 @@ const FAQ = [
   ['Comment travailler sans Internet ?', "Continuez normalement : les opérations sont mémorisées sur l'appareil et envoyées automatiquement au retour de la connexion."],
   ['Comment payer un fournisseur à crédit petit à petit ?', "Clients & Fournisseurs → fiche du fournisseur → « Payer le fournisseur » : chaque paiement réduit la dette et la caisse."]
 ];
+/* ---------- MANUEL UTILISATEUR (module par module, partie par partie, avec exemples chiffrés) ---------- */
+const MANUAL = [
+  { k: 'general', t: 'Premiers pas et règles générales', intro: 'À lire en premier : ces règles valent pour tous les écrans de l’application.', parts: [
+    ['Se connecter et comprendre les profils', 'On se connecte avec son compte Google, préalablement ajouté par l’administrateur (module Utilisateurs). Six profils existent : Administrateur, Gérant, Caissier, Magasinier, Comptable et Observateur. Chaque profil ne voit que les modules qui le concernent.', 'Marie est caissière : elle voit Ventes, Caisse et Clients & Fournisseurs, mais ni Produits ni Paramètres. Paul est magasinier : il gère Produits, Catégories, Entrées de stock et Inventaire. Toutes leurs opérations portent leur nom dans l’Historique.'],
+    ['Devise principale et taux de change', 'Les prix et les totaux s’affichent dans la devise principale (le franc congolais, CDF, par défaut). Le taux « 1 $ = ? FC » est enregistré avec chaque opération : changer le taux ne modifie jamais les opérations passées.', 'Taux du jour : 1 $ = 2 300 FC. Un article à 4,60 $ vaut 4,60 × 2 300 = 10 580 FC. Si le taux passe à 2 400 FC demain, la vente d’aujourd’hui reste calculée à 2 300 FC.'],
+    ['Travailler sans Internet', 'L’application continue de fonctionner sans connexion : les opérations sont gardées sur le téléphone et envoyées automatiquement dès que le réseau revient. Le voyant en haut indique « En ligne » ou « Hors ligne ». Certaines fonctions ont besoin d’Internet : recherche du nom d’un code-barres, export PowerPoint (au premier chargement), assistant IA.', 'Le réseau coupe en pleine journée : vous faites 12 ventes hors connexion. À la reconnexion, les 12 ventes, le stock et la caisse se mettent à jour d’eux-mêmes ; ne les ressaisissez pas.'],
+    ['Rechercher partout : mots, codes et fautes de frappe', 'Toutes les barres de recherche acceptent plusieurs mots dans n’importe quel ordre, ignorent les accents et majuscules, retrouvent un code-barres même partiel (ou sans les zéros du début) et tolèrent une faute de frappe quand rien n’est trouvé exactement.', 'Dans Ventes ou Produits, « fanta orange » trouve « Fanta Orange 33 cl ». Taper « 4567 » trouve le produit dont le code-barres est 6001234567890. « fnata » (faute) propose quand même la Fanta.'],
+    ['Quand un message rouge apparaît', 'Un message rouge est un blocage de sécurité : il explique pourquoi l’opération est refusée et comment la corriger. Rien n’est enregistré tant que le blocage n’est pas levé.', '« Fonds insuffisants » : la caisse ne couvre pas la dépense. « Stock insuffisant » : vous vendez plus que disponible. « Plafond de crédit dépassé » : le client doit d’abord rembourser. « Ouvrez la caisse » : ouvrez la caisse avant d’encaisser des espèces.']
+  ] },
+  { k: 'dashboard', t: 'Tableau de bord', intro: 'La vue d’ensemble de votre commerce, alimentée uniquement par vos opérations réelles.', parts: [
+    ['Lire les cartes de chiffres', 'Chiffre d’affaires = total des ventes non annulées. Bénéfice brut = ventes − coût d’achat des produits vendus. Bénéfice net = bénéfice brut − dépenses. Les valeurs de stock et de caisse sont celles d’aujourd’hui.', 'Sur le mois : 5 ventes pour 434 150 FC, coût des marchandises 373 920 FC, donc bénéfice brut 434 150 − 373 920 = 60 230 FC (13,9 % du chiffre d’affaires). Sans dépense, le bénéfice net est aussi de 60 230 FC.'],
+    ['Choisir la période', 'Les boutons de période (jour, semaine, mois, année) recalculent les cartes et les graphiques. La semaine commence le lundi.', 'Le 21 novembre, « Mois » couvre du 1er au 30 novembre ; « Jour » ne montre que les ventes du 21.'],
+    ['Alertes et graphiques', 'Les alertes signalent ruptures, stocks faibles, produits qui expirent, crédits en retard et dettes à payer.', 'Le stock minimum de la Fanta est 24 ; il en reste 20 : une alerte « stock faible » apparaît jusqu’à la prochaine entrée de stock.']
+  ] },
+  { k: 'sales', t: 'Ventes', intro: 'Enregistrer une vente, encaisser, imprimer le reçu et gérer les cas particuliers.', parts: [
+    ['Avant de vendre : ouvrir la caisse', 'Pour encaisser des espèces (CDF ou USD), la caisse doit être ouverte dans le module Caisse avec le fonds de départ. Mobile Money, banque et crédit n’exigent pas cette ouverture.', 'Le matin, la caissière ouvre la caisse avec 50 000 FC de fonds initial. Ensuite seulement elle encaisse en espèces.'],
+    ['Ajouter les produits au panier', 'Touchez un produit, ou scannez son code-barres (bouton Scanner), ou tapez dans la barre de recherche puis appuyez sur Entrée : un code exact ajoute directement le produit, un seul résultat est aussi ajouté. Les produits suspendus, expirés ou en rupture ne peuvent pas être vendus.', 'Vous scannez le code d’un Coca-Cola : il est ajouté au panier. Vous tapez « coca 33 » : seuls les Coca de 33 cl restent affichés.'],
+    ['Code-barres inconnu : ne bloquez pas la vente', 'Si un code n’existe pas dans le catalogue, une fenêtre propose deux choix rapides : retrouver le produit existant (le code lui sera associé pour toujours) ou créer une nouvelle fiche avec ce code, déjà rempli. Le nom est cherché en ligne quand c’est possible. Un code mal lu (somme de contrôle invalide) est signalé : rescannez-le.', 'Un article importé n’avait pas de code-barres. Vous scannez son étiquette, tapez « sucre » dans la fenêtre, touchez « Choisir » : le code est mémorisé et le sucre est ajouté. La prochaine fois, un simple scan suffit.'],
+    ['Unités et conversions (carton, bouteille…)', 'Chaque ligne du panier peut être vendue dans l’unité de votre choix. Le stock reste compté en unité de base et se lit dans les emballages définis sur la fiche produit.', '1 carton = 12 bouteilles. Stock : 119 bouteilles, affiché « 9 Carton + 11 Bouteille ». Vous vendez 1 carton : il reste 107 bouteilles = 8 cartons + 11 bouteilles.'],
+    ['Remise', 'La remise s’exprime en pourcentage. Un caissier est limité au maximum fixé dans les Paramètres (10 % par défaut) ; un gérant ou un administrateur peut aller jusqu’à 100 %.', 'Panier de 50 000 FC, remise de 10 % : 5 000 FC de remise, le client paie 45 000 FC. Une remise de 15 % par un caissier est refusée.'],
+    ['Modes de paiement et paiement mixte', 'Choisissez Espèces CDF, Espèces USD, Mobile Money CDF ou USD, Banque USD, Crédit, ou Mixte pour répartir le montant. En mixte, le total des paiements doit être égal au montant à payer (« Reste à payer » = 0).', 'Total 45 000 FC : 20 000 FC en espèces + 25 000 FC en Mobile Money CDF = 45 000 FC, la vente peut être validée. Avec 20 000 + 20 000, il reste 5 000 FC à payer : la vente est refusée.'],
+    ['Vente à crédit', 'Le client doit figurer dans la liste (un passant ne peut pas acheter à crédit), avoir un plafond de crédit, et sa dette après la vente ne doit pas dépasser ce plafond. Une échéance est proposée (30 jours par défaut, modifiable dans les Paramètres).', 'Plafond 100 000 FC, dette actuelle 70 000 FC. Une vente à crédit de 40 000 FC donnerait 110 000 FC : refusée. Vous pouvez faire un paiement mixte : 30 000 FC à crédit + 10 000 FC en espèces.'],
+    ['Client de passage et fiche client automatique', 'Choisissez « Passant » pour un acheteur qui n’est pas dans votre liste. Si vous saisissez son nom ET son téléphone (ex. « Jean, 0990000000 »), une fiche client est créée automatiquement, la vente lui est rattachée et le reçu affiche son nom et son numéro. Si ce numéro existe déjà, la vente est rattachée à la fiche existante : aucun doublon.', 'Vous saisissez « Marie Kabila, 081 234 5678 » : la fiche « Marie Kabila » apparaît dans Clients avec cette vente. Si vous saisissez seulement « Marie », elle reste un passant simple.'],
+    ['Reçu, partage et annulation', 'Après l’encaissement, le reçu s’affiche : imprimez-le ou partagez-le (WhatsApp, etc.). Retrouvez toutes les ventes dans l’onglet « Historique des ventes ». Seul un gérant ou un administrateur peut annuler une vente : le stock et la caisse sont alors rétablis et une justification est demandée.', 'La vente V261121-AB12 de 45 000 FC est annulée par erreur de prix : les produits reviennent en stock, 45 000 FC sont retirés de la caisse, et l’annulation apparaît dans l’Historique.']
+  ] },
+  { k: 'products', t: 'Produits', intro: 'La fiche de chaque article : identité, prix, emballages, stock et dates.', parts: [
+    ['Créer un produit', 'Touchez « Nouveau » puis renseignez : nom, catégorie, prix d’achat et de vente d’UNE pièce (avec leur devise), unité de base, emballages éventuels, stock de départ, stock minimum, dates et fournisseur. L’identifiant produit se crée tout seul si vous le laissez vide.', 'Bouteille de Fanta : achat 2 500 FC, vente 3 500 FC. Marge = 3 500 − 2 500 = 1 000 FC, soit 28,6 % du prix de vente (1 000 / 3 500).'],
+    ['Grands emballages et conversions', 'Indiquez le grand emballage (Carton, Sac, Casier…) et le nombre de pièces qu’il contient. Le prix du carton se calcule automatiquement (prix de la pièce × nombre) sauf si vous en fixez un autre.', 'Carton de 12 bouteilles. Bouteille à 3 500 FC : le carton vaut 42 000 FC par défaut ; si vous saisissez 40 000 FC comme prix du carton, c’est ce prix qui s’applique (rabais de 2 000 FC).'],
+    ['Codes-barres : saisie, scan et formats reconnus', 'Saisissez ou scannez le code. L’application normalise les formats : espaces, tirets, retours du scanner, « .0 » ajouté par un import Excel et zéros du début sont ignorés, et un code UPC-A de 12 chiffres est reconnu comme le même produit que son équivalent EAN-13. Un code déjà utilisé par un autre produit est refusé.', 'Les codes 036000291452 (UPC-A) et 0036000291452 (EAN-13) désignent le même produit. Si vous saisissez le second alors que le premier existe, l’application répond « déjà utilisé par… ».'],
+    ['Plusieurs codes pour un même produit', 'Quand un produit arrive avec une autre étiquette (nouveau fournisseur, nouvel emballage), associez le second code au lieu de créer un doublon : il suffit de scanner puis de choisir le produit existant. Les codes associés sont affichés sur la fiche.', 'Le même sucre existe avec l’étiquette du fournisseur A et celle du fournisseur B : les deux codes ouvrent la même fiche et le même stock.'],
+    ['Rechercher et filtrer la liste', 'La liste se filtre par texte (nom, code, code-barres même partiel, marque, catégorie, fournisseur), par état (En stock, Stock faible, Rupture, Expire / expiré, Suspendus, Sans code-barres), par catégorie et par fournisseur, et se trie par nom, stock, prix ou date. Le bouton Scanner ouvre directement la fiche du produit scanné.', 'Pour compléter vos articles importés : touchez « Sans code-barres », puis scannez chaque article et associez le code. Pour préparer une commande : filtre « Stock faible » + fournisseur « Brasimba ».'],
+    ['Stock minimum, expiration et suspension', 'Sous le stock minimum, le produit passe en « Faible » ; à zéro, en « Rupture ». Une date d’expiration proche (30 jours par défaut) déclenche une alerte ; un produit expiré ne peut plus être vendu. Vous pouvez aussi suspendre la vente d’un produit.', 'Minimum 24, stock 20 : état « Faible ». Expiration le 10/12 et nous sommes le 21/11 : l’affichage indique « Expire 19 j ».']
+  ] },
+  { k: 'categories', t: 'Catégories', intro: 'Regrouper les produits pour mieux les retrouver et les analyser.', parts: [
+    ['Créer et utiliser les catégories', 'Créez vos catégories (VERRE, EKOLO, WHISKY…) avant les produits. Chaque carte affiche le stock, la valeur, le chiffre d’affaires, le bénéfice et les alertes de la catégorie. Les boutons de catégorie filtrent aussi l’écran de vente.', 'En vente, touchez « WHISKY » : seuls les whiskies s’affichent, plus simple en période de forte affluence.']
+  ] },
+  { k: 'purchases', t: 'Entrées de stock', intro: 'Enregistrer une livraison de marchandises, la payer et mettre le stock à jour.', parts: [
+    ['Choisir le fournisseur : la liste se filtre', 'Dès qu’un fournisseur est choisi, seuls ses articles sont proposés dans les lignes. Si vous changez de fournisseur, les lignes d’un autre fournisseur sont retirées. Pour recevoir un article qui n’est pas encore le sien, utilisez « Rattacher un autre article à ce fournisseur » (confirmation demandée) : c’est le seul moyen, ce qui évite les erreurs de réception.', 'Vous choisissez « Brasimba » : on ne voit que ses bières. Le sucre n’apparaît pas ; vous touchez « Rattacher », choisissez « Sucre 1 kg » et confirmez : il est désormais rattaché à Brasimba.'],
+    ['Saisir les lignes, prix et transport', 'Pour chaque ligne : produit, unité, quantité et prix. Choisissez la devise des prix saisis. Les frais de transport sont répartis sur les lignes au prorata de leur valeur pour calculer le vrai coût de revient, qui met à jour le prix d’achat du produit.', '10 cartons de 12 bouteilles à 36 000 FC le carton = 360 000 FC, plus 20 000 FC de transport = 380 000 FC. Coût réel d’une bouteille : 380 000 / 120 = 3 166,67 FC.'],
+    ['Payer cash ou à crédit — contrôle de liquidité', 'Cash : la caisse est débitée du compte choisi, mais l’opération est BLOQUÉE si le solde est insuffisant (une alerte rouge apparaît dès la saisie). Crédit : une dette fournisseur est créée, à régler plus tard dans Clients & Fournisseurs.', 'Espèces CDF en caisse : 300 000 FC. Entrée cash de 380 000 FC : bloquée, il manque 80 000 FC. Solutions : alimenter la caisse, payer par Mobile Money ou Banque, ou payer à crédit.'],
+    ['Justificatif et vérification', 'Ajoutez une photo du bordereau de livraison. Touchez l’œil sur une entrée pour revoir les lignes, le taux enregistré, le mode de paiement et le total.', 'Photo du bon de livraison n° 0457 jointe : en cas de litige, le justificatif est dans l’entrée.']
+  ] },
+  { k: 'inventory', t: 'Inventaire', intro: 'Comparer le stock réel au stock de l’application et corriger les écarts.', parts: [
+    ['Faire un inventaire', 'Choisissez tout le magasin ou une catégorie, saisissez le stock physique compté, les produits endommagés et le motif (casse, rongé, expiré…). À la validation, les stocks sont ajustés et un rapport est conservé ; l’opération est notée dans l’Historique.', 'Fanta : stock dans l’application 48, compté 45, motif « casse » : écart de −3 bouteilles. Valeur perdue = 3 × 2 500 FC (prix d’achat) = 7 500 FC.']
+  ] },
+  { k: 'cash', t: 'Caisse', intro: 'Suivre l’argent en espèces, Mobile Money et banque, en CDF et en USD.', parts: [
+    ['Ouvrir la caisse', 'En début de journée, ouvrez la caisse avec le fonds initial. Sans caisse ouverte, les espèces ne s’encaissent pas.', 'Fonds initial : 50 000 FC en espèces CDF.'],
+    ['Cinq comptes séparés', 'Espèces CDF, Espèces USD, Mobile Money CDF, Mobile Money USD et Banque USD ont chacun leur solde. Une dépense ou un paiement ne peut sortir que d’un compte qui a assez d’argent.', 'Espèces CDF : 120 000 FC ; Mobile Money CDF : 80 000 FC. Un paiement de 100 000 FC en Mobile Money est refusé, mais possible en espèces.'],
+    ['Encaissements, décaissements, dépôts, retraits', 'Utilisez ces opérations pour les mouvements hors ventes. Tout décaissement ou retrait déclenche une demande de justification.', 'Vous retirez 30 000 FC en espèces pour acheter du carburant : l’application vous demande « pourquoi ? » ; vous répondez et joignez la photo du reçu.'],
+    ['Clôturer la caisse', 'Comptez l’argent réel et saisissez-le : l’application calcule l’écart avec le solde théorique, l’enregistre et demande une justification s’il existe. Le rapport journalier PDF résume toute la journée.', 'Théorique 350 000 FC, compté 348 000 FC : écart de −2 000 FC, à justifier (ex. erreur de monnaie).']
+  ] },
+  { k: 'expenses', t: 'Dépenses', intro: 'Enregistrer les charges du commerce sous contrôle.', parts: [
+    ['Saisir une dépense', 'Indiquez le motif, la catégorie (transport, loyer, électricité, salaires…), le montant, la devise et un justificatif facultatif. La dépense sort de la caisse.', 'Transport de marchandises : 15 000 FC, catégorie « Transport », photo du reçu jointe.'],
+    ['Blocage : dépense supérieure au bénéfice', 'Une dépense qui ferait dépasser le bénéfice brut du mois est bloquée. L’administrateur peut la forcer avec une justification écrite.', 'Bénéfice brut du mois : 60 230 FC. Une dépense de 100 000 FC est bloquée ; une de 40 000 FC passe.']
+  ] },
+  { k: 'partners', t: 'Clients & Fournisseurs', intro: 'Les fiches, le crédit, les dettes, les règlements et leurs reçus.', parts: [
+    ['Fiches clients et plafond de crédit', 'Chaque client a un téléphone, un plafond de crédit, un historique d’achats et un solde (dette). Le plafond par défaut vient des Paramètres. Un rappel WhatsApp peut être envoyé depuis la fiche.', 'Client « Papa Jean » : plafond 100 000 FC, achats cumulés 640 000 FC, dette 40 000 FC.'],
+    ['Encaisser le remboursement d’un client', 'Ouvrez la fiche, touchez « Encaisser un remboursement », choisissez le compte et le montant. Le solde baisse, la caisse augmente et un reçu est généré automatiquement.', 'Dette de 40 000 FC, le client donne 15 000 FC en espèces CDF : le reçu indique solde avant 40 000 FC, solde après 25 000 FC.'],
+    ['Payer un fournisseur', 'Ouvrez la fiche du fournisseur, touchez « Payer le fournisseur », choisissez le compte, le montant, puis saisissez le nom de la personne qui reçoit l’argent et faites-la signer au doigt. Le paiement ne peut ni dépasser la dette ni dépasser le solde du compte.', 'Dette de 500 000 FC. Vous payez 200 000 FC par Mobile Money CDF à « M. Kabongo », qui signe : il reste 300 000 FC à payer.'],
+    ['Reçus de règlement et traçabilité', 'Chaque règlement (client ou fournisseur) produit un reçu horodaté avec une référence unique (RC-… pour un client, RF-… pour un fournisseur), le montant, le mode de paiement, le solde avant/après et l’opérateur. Il se partage, s’imprime ou s’exporte en PDF, et se retrouve dans la fiche du tiers et dans l’Historique.', 'Référence RC-20261121-A1B2C3 : en cas de contestation, tapez-la dans l’Historique pour retrouver l’opération et rouvrir le reçu.'],
+    ['Taux propre à un fournisseur', 'Un fournisseur peut avoir son propre taux de change : sa dette est alors convertie à ce taux. Les autres montants utilisent le taux général.', 'Dette de 100 $. Taux général 2 300 FC → 230 000 FC ; taux de ce fournisseur 2 400 FC → 240 000 FC.'],
+    ['Notes, ristourne, commissions et comparaison', 'Notez chaque fournisseur sur 100 (qualité, délai, prix, fiabilité, disponibilité, crédit). Renseignez ristourne et commission de fin de mois. « Comparer » classe les fournisseurs par prix d’achat pour un produit donné. « Top 20 » classe vos meilleurs clients.', 'Commission de 3 % sur 1 000 000 FC de ventes de ses produits = 30 000 FC, visible quand le mois est clôturé.']
+  ] },
+  { k: 'journal', t: 'Historique', intro: 'Le journal de toutes les opérations, en lecture seule.', parts: [
+    ['Tout est affiché en francs congolais (CDF)', 'Pour éviter toute ambiguïté, tous les montants de l’Historique sont affichés en CDF. Une opération saisie en dollars est convertie automatiquement, au taux enregistré avec l’opération quand il est connu, sinon au taux actuel. L’export Excel suit la même règle.', 'Une opération de 10 $ au taux de 2 300 FC apparaît « 23 000 FC ». Une description « Vente $10,50 » s’affiche « Vente 24 150 FC ».'],
+    ['Filtrer et retrouver une opération', 'Filtrez par type, date, utilisateur, catégorie ou texte (y compris une référence de reçu). Les lignes de règlement affichent un lien vers leur reçu.', 'Filtre « Remboursement » + utilisateur « Marie » + dates du mois : tous les remboursements encaissés par Marie.'],
+    ['Justifier les opérations sensibles', 'Annulations, retraits, décaissements, dépenses, inventaires et modifications de produits peuvent recevoir une justification via le lien « Ajouter une justification ».', 'Annulation de vente : « erreur de prix corrigée avec le client » ajouté sous la ligne.']
+  ] },
+  { k: 'justifs', t: 'Justifications', intro: 'Expliquer les opérations sensibles et les faire valider.', parts: [
+    ['Demander, répondre, valider', 'Une justification est demandée automatiquement pour les opérations sensibles. L’employé répond avec un texte et une photo ; l’administrateur marque « justifié », « accepté » ou « rejeté ». Vous pouvez répondre plus tard : l’opération reste « en attente ».', 'Écart de caisse de −2 000 FC : la caissière répond « monnaie rendue en trop » ; l’administrateur l’accepte.']
+  ] },
+  { k: 'reports', t: 'Rapports', intro: 'Analyser une période et exporter les résultats.', parts: [
+    ['Choisir le rapport et la période', 'Sélectionnez un type (synthèse, ventes, achats, dépenses, bénéfices, stocks, dettes, caisse, employés…) puis la période avec les boutons ou les dates.', 'Rapport « Ventes » du 01/11 au 30/11 : liste des ventes avec remise, total et mode de paiement.'],
+    ['Exporter en PDF, Excel, CSV ou PowerPoint', 'Les boutons exportent le rapport affiché. Le bouton PowerPoint crée une présentation complète de la période : page de titre, sommaire, synthèse, puis un tableau par module (Stocks, Entrées, Ventes, Clients, Fournisseurs, Dettes, Règlements & reçus, Dépenses, Caisse, Historique), limité aux modules accessibles à votre profil.', 'Mois de novembre : touchez « Mois » puis « PowerPoint ». Le fichier KAJIMINYI_Synthese_… s’ouvre dans PowerPoint ou Google Slides pour la réunion avec les associés.']
+  ] },
+  { k: 'health', t: 'Business Health', intro: 'Le score de santé de votre commerce.', parts: [
+    ['Score sur 100 et seuil de rentabilité', 'Le score combine rentabilité, croissance, dépenses, stock, dettes, trésorerie et pertes. Il reste « indicatif » tant que les données sont insuffisantes. Le seuil de rentabilité est le chiffre d’affaires minimum pour couvrir les dépenses.', 'Dépenses de 300 000 FC par mois et marge brute de 20 % : seuil = 300 000 / 0,20 = 1 500 000 FC de ventes par mois.']
+  ] },
+  { k: 'usage', t: 'Santé & usage', intro: 'Qualité d’utilisation de l’application par chaque employé.', parts: [
+    ['Indicateurs par employé', 'Le module suit annulations, justifications en attente, écarts de caisse et suppressions pour repérer les pratiques à corriger, avec des graphiques.', 'Un caissier avec 6 annulations en une semaine pour 40 ventes mérite une discussion.']
+  ] },
+  { k: 'calc', t: 'Smart Calculator', intro: 'Des calculs commerciaux prêts à l’emploi.', parts: [
+    ['Marge, majoration, TVA, remise, change', 'Choisissez le calcul, saisissez les valeurs, puis « Enregistrer » pour le retrouver dans l’historique des calculs. Taux de marge = (vente − achat) / vente. Majoration = (vente − achat) / achat.', 'Achat 3 000 FC, vente 4 000 FC : taux de marge 25 %, majoration 33,3 %. TVA 16 % sur 10 000 FC HT : 1 600 FC de TVA, 11 600 FC TTC.']
+  ] },
+  { k: 'calendar', t: 'Calendrier', intro: 'Échéances et rappels au même endroit.', parts: [
+    ['Échéances automatiques et rappels', 'Expirations de produits, échéances de crédits clients et paiements fournisseurs s’ajoutent seuls. Ajoutez vos rappels et exportez-les vers le calendrier du téléphone.', 'Crédit du client « Papa Jean » à échéance le 30/11 : il apparaît ce jour-là, avec le montant restant dû.']
+  ] },
+  { k: 'notifs', t: 'Notifications', intro: 'Toutes les alertes en cours.', parts: [
+    ['Alertes, notifications du téléphone et sonnerie', 'Les alertes graves (rupture, crédit en retard, expiration) sonnent. Autorisez les notifications du téléphone pour les recevoir même application fermée, et testez la sonnerie.', 'Une alerte « Sucre : rupture » arrive pendant que vous êtes en livraison : vous commandez avant de manquer des ventes.']
+  ] },
+  { k: 'chat', t: 'Chat & sondages', intro: 'Communiquer avec l’équipe dans l’application.', parts: [
+    ['Canaux, annonces et sondages', 'Discutez par canal (général, caisse, stock…), lisez les annonces et votez aux sondages lancés par la direction.', 'Sondage : « Fermer à 19 h ou 20 h ? » Chaque employé vote une fois ; le résultat s’affiche en pourcentage.']
+  ] },
+  { k: 'users', t: 'Utilisateurs', intro: 'Donner et retirer des accès (administrateur).', parts: [
+    ['Ajouter un employé et régler ses droits', 'Saisissez l’adresse Gmail de l’employé, son nom et son profil, puis ajustez ses permissions module par module. Vous pouvez suspendre un compte sans le supprimer ; son historique est conservé.', 'Nouvelle caissière : ajoutez marie@gmail.com avec le profil « Caissier ». Si elle quitte l’entreprise, décochez « Compte actif ».']
+  ] },
+  { k: 'settings', t: 'Paramètres', intro: 'Régler l’application selon votre commerce.', parts: [
+    ['Identité, devises et taux', 'Nom, adresse et téléphone du commerce (imprimés sur les reçus), devise principale, taux de change, règle éventuelle d’interdiction des espèces USD.', 'Le taux passe de 2 300 à 2 350 FC : modifiez-le ici ; les anciens reçus gardent 2 300 FC.'],
+    ['Modes de paiement, remises, crédit, expiration', 'Activez les modes de paiement utilisés, fixez la remise maximale du caissier (10 % par défaut), le plafond de crédit par défaut, le délai de crédit (30 jours) et le nombre de jours avant alerte d’expiration (30 jours).', 'Vous passez la remise maximale à 5 % : un caissier ne peut plus accorder 10 %.'],
+    ['Affichage, sécurité et sauvegarde', 'Thème clair ou sombre, couleurs, taille du texte, déconnexion automatique par inactivité, modules affichés, exportation de sauvegarde et assistant IA.', 'Déconnexion après 30 minutes d’inactivité : si un employé laisse son téléphone, la session se ferme seule.']
+  ] },
+  { k: 'help', t: 'Centre d’aide', intro: 'Où trouver de l’aide.', parts: [
+    ['Manuel, FAQ, assistant et signalement', 'Ce manuel explique chaque module. La FAQ répond aux questions fréquentes. L’assistant répond à partir de vos données réelles. « Signaler un problème » envoie un message à l’administrateur avec une capture d’écran possible.', 'Pour savoir pourquoi une dépense est bloquée : cherchez « dépense » dans ce manuel, ou demandez à l’assistant « Pourquoi ma dépense est-elle bloquée ? ».']
+  ] }
+];
+const manualHtml = () => MANUAL.filter(m => m.k === 'general' || can(m.k)).map(m => `<details class="card mod" id="man-${m.k}" data-k="${m.k}"><summary><b>${esc(m.t)}</b> <small class="muted">· ${m.parts.length} partie(s)</small></summary><p class="muted sm">${esc(m.intro)}</p>
+  ${m.parts.map(([h, x, ex], i) => `<div class="mpart" data-s="${esc(fold(m.t + ' ' + h + ' ' + x + ' ' + (ex || '')))}"><h4>${i + 1}. ${esc(h)}</h4><p>${esc(x)}</p>${ex ? `<div class="hint"><b>Exemple concret —</b> ${esc(ex)}</div>` : ''}</div>`).join('')}
+  ${m.k === 'general' ? '' : `<p><a href="#/${m.k}">Ouvrir ce module →</a></p>`}</details>`).join('');
+let mopenK = null;
+A.mopen = d => { if (d.k !== 'general' && !can(d.k)) return; htab = 'tuto'; mopenK = d.k; if (S.route !== 'help') location.hash = '#/help'; else views.help($('#view')); };
+document.addEventListener('input', e => {
+  if (e.target.id !== 'mq') return; const q = e.target.value.trim();
+  $$('.mod').forEach(dt => { let n = 0; $$('.mpart', dt).forEach(p => { const ok = !q || textMatch(p._f ??= p.dataset.s, q); p.hidden = !ok; if (ok) n++; }); dt.hidden = !n; if (q) dt.open = n > 0; });
+  const z = $('#mzero'); if (z) z.hidden = !q || $$('.mod:not([hidden])').length > 0;
+});
+
 let htab = 'start';
 views.help = el => {
-  const T = [['start', 'Démarrer'], ['tuto', 'Tutoriels'], ['faq', 'FAQ'], ['bot', 'Assistant'], ['contact', 'Contact'], ['report', 'Signaler un problème']];
+  const T = [['start', 'Démarrer'], ['tuto', 'Manuel'], ['faq', 'FAQ'], ['bot', 'Assistant'], ['contact', 'Contact'], ['report', 'Signaler un problème']];
   let body = '';
-  if (htab === 'start') body = `<div class="card"><h3>Guide de démarrage</h3><ol class="guide"><li><b>Paramètres</b> : nom du commerce, taux de change (1 $ = ? FC), modes de paiement.</li><li><b>Catégories</b> : vérifiez ou ajoutez vos catégories.</li><li><b>Fournisseurs</b> : enregistrez vos fournisseurs (facultatif).</li><li><b>Produits</b> : créez vos produits avec prix, unités et stock initial.</li><li><b>Caisse</b> : ouvrez la caisse avec le fonds initial.</li><li><b>Ventes</b> : vendez ! Tout se met à jour automatiquement.</li><li><b>Utilisateurs</b> : ajoutez vos employés avec leur profil.</li></ol></div>`;
-  else if (htab === 'tuto') body = Object.entries(HELP).filter(([k]) => can(k)).map(([k, [t, x]]) => `<details class="card"><summary><b>${t}</b></summary><p>${esc(x)}</p><a href="#/${k}">Ouvrir ce module →</a></details>`).join('');
+  if (htab === 'start') body = `<div class="card"><h3>Guide de démarrage</h3><ol class="guide"><li><b>Paramètres</b> : nom du commerce, taux de change (1 $ = ? FC), modes de paiement.</li><li><b>Catégories</b> : vérifiez ou ajoutez vos catégories.</li><li><b>Fournisseurs</b> : enregistrez vos fournisseurs (facultatif).</li><li><b>Produits</b> : créez vos produits avec prix, unités et stock initial.</li><li><b>Caisse</b> : ouvrez la caisse avec le fonds initial.</li><li><b>Ventes</b> : vendez ! Tout se met à jour automatiquement.</li><li><b>Utilisateurs</b> : ajoutez vos employés avec leur profil.</li></ol></div><div class="card"><h3>Besoin d’un détail ?</h3><p>L’onglet <b>Manuel</b> explique chaque module partie par partie, avec des exemples chiffrés. Vous pouvez y chercher un mot (« remise », « crédit », « code-barres »…). Sur chaque écran, le bouton d’aide ouvre le chapitre correspondant.</p><button class="btn" data-act="htab" data-k="tuto">Ouvrir le manuel</button></div>`;
+  else if (htab === 'tuto') body = `<label class="sbox">${ic('search', 18)}<input id="mq" placeholder="Rechercher dans le manuel (ex. remise, crédit, code-barres)…" autocomplete="off"></label><details class="card"><summary><b>Sommaire</b> <small class="muted">· touchez un module pour l’ouvrir</small></summary><div class="chips" style="margin-top:8px">${MANUAL.filter(m => m.k === 'general' || can(m.k)).map(m => `<button class="chip" data-act="mopen" data-k="${m.k}">${esc(m.t)}</button>`).join('')}</div></details><div id="mzero" class="card" hidden><p class="muted">Aucun passage du manuel ne correspond. Essayez un autre mot ou posez la question à l’assistant.</p></div>${manualHtml()}`;
   else if (htab === 'faq') body = FAQ.map(([q, a]) => `<details class="card"><summary><b>${esc(q)}</b></summary><p>${esc(a)}</p></details>`).join('');
   else if (htab === 'bot') body = `<div class="card"><p>L'assistant KAJIMINYI répond à partir de vos données réelles, sans inventer de chiffres.</p><button class="btn" data-act="assistant">${ic('bot', 18)} Ouvrir l'assistant</button></div>`;
   else if (htab === 'contact') { const sp = S.settings.support || {}; body = `<div class="card"><h3>Support</h3>${sp.phone ? `<div class="mi"><span>Téléphone</span><a href="tel:${esc(sp.phone)}">${esc(sp.phone)}</a></div>` : ''}${sp.wa ? `<div class="mi"><span>WhatsApp</span><a target="_blank" rel="noopener" href="https://wa.me/${String(sp.wa).replace(/\D/g, '')}">Écrire sur WhatsApp</a></div>` : ''}${sp.email ? `<div class="mi"><span>E-mail</span><a href="mailto:${esc(sp.email)}">${esc(sp.email)}</a></div>` : ''}${!sp.phone && !sp.wa && !sp.email ? '<p class="muted">Aucun contact de support défini. L\'administrateur peut l\'ajouter dans Paramètres → Général.</p>' : ''}</div>`; }
   else body = `<div class="card"><h3>Signaler un problème</h3><form class="frm" id="tkf">${fld('Titre', 'title', '', 'text', 'required')}<label>Description<textarea name="desc" rows="4" required placeholder="Que s'est-il passé ? Sur quel écran ?"></textarea></label><label>Capture d'écran (facultatif)<input type="file" id="tkfile" accept="image/*"></label><button class="btn">Envoyer</button></form></div>
     ${isMgr() ? `<div class="card"><h3>Problèmes signalés</h3>${[...S.tickets].sort((a, b) => b.ts - a.ts).map(t => `<div class="mi"><span><b>${esc(t.title)}</b> <small class="muted">${esc(t.user)} · ${fmtDate(t.ts)} · ${esc(t.module || '')}</small><br>${esc(t.desc)}${attHtml(t.att)}</span>${t.status === 'open' ? `<button class="btn sm ghost" data-act="tkdone" data-id="${t.id}">Résolu</button>` : '<span class="badge">Résolu</span>'}</div>`).join('') || '<p class="muted">Aucun signalement.</p>'}</div>` : ''}`;
   el.innerHTML = page("Centre d'aide", `<button class="btn ghost sm" data-act="assistant">${ic('bot', 16)} Assistant</button>`, `<div class="chips">${T.map(([k, t]) => `<button class="chip ${htab === k ? 'on' : ''}" data-act="htab" data-k="${k}">${t}</button>`).join('')}</div>${body}`);
+  if (mopenK) { const dt = $('#man-' + mopenK); if (dt) { dt.open = true; dt.scrollIntoView({ block: 'start' }); } mopenK = null; }
   $('#tkf')?.addEventListener('submit', async e => {
     e.preventDefault(); try { const att = await readAttach($('#tkfile').files[0]), id = uid(), b = batch(); b.set('tickets', id, { id, ts: Date.now(), user: who(), email: S.user.email, title: e.target.title.value.trim(), desc: e.target.desc.value.trim(), att, module: S.route || '', ua: navigator.userAgent.slice(0, 120), status: 'open' }); b.commit(); e.target.reset(); toast('Problème signalé, merci !'); } catch (err) { toast(err.message, 'err'); }
   });
 };
 A.htab = d => { htab = d.k; views.help($('#view')); };
 A.tkdone = d => { const b = batch(); b.upd('tickets', d.id, { status: 'done', doneBy: who() }); b.commit(); };
-A.helpctx = () => { const h = HELP[S.route]; if (h) modal('Aide : ' + h[0], `<p>${esc(h[1])}</p><div class="row end"><button class="btn" data-act="assistant" data-close>${ic('bot', 16)} Poser une question</button></div>`); else location.hash = '#/help'; };
+A.helpctx = () => { const h = HELP[S.route]; if (h) modal('Aide : ' + h[0], `<p>${esc(h[1])}</p><div class="row end"><button class="btn ghost" data-act="mopen" data-k="${S.route}" data-close>Manuel complet</button><button class="btn" data-act="assistant" data-close>${ic('bot', 16)} Poser une question</button></div>`); else location.hash = '#/help'; };
 
 /* ================= CONDITIONS & CONFIDENTIALITÉ ================= */
 const LEGAL = {
