@@ -303,7 +303,7 @@ a,img,button{-webkit-user-drag:none;-webkit-touch-callout:none}
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js"></script>
+<script defer src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAnalytics, isSupported } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics.js";
@@ -1004,7 +1004,7 @@ function openCart() {
       <div class="qty"><button data-ca="dec" data-i="${i}">−</button><input type="number" step="any" min="0" inputmode="decimal" value="${x.qty}" data-cf="qty" data-i="${i}"><button data-ca="inc" data-i="${i}">+</button><button data-ca="rm" data-i="${i}" style="color:var(--r)">✕</button></div></div>`).join('')}
       <div class="frm" style="margin-top:10px"><div class="two">
         <label>Remise (%) — max ${isMgr() ? 100 : S.settings.maxDisc}%<input type="number" step="any" min="0" data-cf="disc" value="${esc(ck.disc)}"></label>
-        <label>Client${needCl ? ' (obligatoire)' : ''}<select data-cf="client"><option value="">— Comptoir —</option><option value="__passant" ${ck.client === '__passant' ? 'selected' : ''}>🚶 Passant (pas dans ma liste)</option>${S.clients.map(c => `<option value="${c.id}" ${ck.client === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label></div>${ck.client === '__passant' ? `<label>Nom ou téléphone du passant (facultatif)<input data-pn placeholder="ex. Jean, 0990000000" value="${esc(ck.pname || '')}" maxlength="60" autocomplete="off"></label>` : ''}</div>
+        <label>Client${needCl ? ' (obligatoire)' : ''}<select data-cf="client"><option value="">— Comptoir —</option><option value="__passant" ${ck.client === '__passant' ? 'selected' : ''}>🚶 Passant (pas dans ma liste)</option>${S.clients.map(c => `<option value="${c.id}" ${ck.client === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label></div>${ck.client === '__passant' ? `<label>Nom et téléphone du passant (facultatif — fiche client créée automatiquement si les deux sont saisis)<input data-pn placeholder="ex. Jean, 0990000000" value="${esc(ck.pname || '')}" maxlength="60" autocomplete="off"></label>` : ''}</div>
       <div class="totbox"><div class="row sp"><span>Sous-total</span><b>${usd(t.sub)}</b></div><div class="row sp"><span>Remise</span><b>−${usd(t.discAmt)}</b></div>
         <div class="row sp"><span>À PAYER</span><span class="big">${usd(t.total)}</span></div><div class="row sp muted"><span>${S.settings.mainCur === 'USD' ? 'en francs' : 'en dollars'}</span><span>${S.settings.mainCur === 'USD' ? cdf(t.total * S.settings.rate) : usdx(t.total)}</span></div></div>
       <div class="chips">${MODES().map(([k, l]) => `<button class="chip ${ck.mode === k ? 'on' : ''}" data-ca="mode" data-m="${k}">${l}</button>`).join('')}</div>
@@ -1044,6 +1044,12 @@ function openCart() {
   body.addEventListener('input', e => { if ('pn' in e.target.dataset) { ck.pname = e.target.value; return; } const f = e.target.dataset.pf; if (f) { ck[f] = e.target.value; reste(); } });
 }
 
+// sépare « Jean, 0990000000 » en nom + téléphone
+function parsePassant(s) {
+  const m = String(s || '').match(/\+?\d[\d\s.\-]{6,}\d/); if (!m) return { name: String(s || '').trim(), phone: '' };
+  const digits = m[0].replace(/\D/g, ''), name = String(s).replace(m[0], ' ').replace(/[,;|/:–—-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return { name: /[A-Za-zÀ-ÿ]{2}/.test(name) ? name : '', phone: digits.length >= 8 && digits.length <= 15 ? m[0].replace(/[\s.\-]+/g, ' ').trim() : '' };
+}
 function checkout(w) {
   const L = cartLines(); if (!L.length) throw new Error('Panier vide');
   L.forEach(x => { if (!sellable(x.p)) throw new Error(`« ${x.p.name} » ne peut pas être vendu (${x.p.suspended ? 'vente suspendue' : 'produit expiré'})`); });
@@ -1054,7 +1060,7 @@ function checkout(w) {
   const pay = payAmounts(t.total);
   if (Math.abs(paidUSD(pay) - t.total) > 0.01) throw new Error('Le total des paiements doit être égal au montant à payer');
   if (pay.usd > 0 && !pmAllowed('usd')) throw new Error("Les paiements en espèces USD ne sont pas autorisés");
-  const cl = S.clients.find(c => c.id === ck.client), passant = ck.client === '__passant', pnm = (ck.pname || '').trim().slice(0, 60);
+  let cl = S.clients.find(c => c.id === ck.client); const passant = ck.client === '__passant', pnm = (ck.pname || '').trim().slice(0, 60), pp = passant ? parsePassant(pnm) : null;
   if (pay.credit > 0) {
     if (passant) throw new Error("Un passant ne peut pas acheter à crédit : enregistrez-le d'abord dans vos clients");
     if (!cl) throw new Error('Choisissez un client pour une vente à crédit');
@@ -1062,28 +1068,35 @@ function checkout(w) {
   }
   if ((pay.usd > 0 || pay.cdf > 0) && !curSession()) throw new Error("Ouvrez la caisse (menu Caisse) avant d'encaisser des espèces");
   const id = uid(), ts = Date.now(), d = new Date(ts);
+  let newCl = null;   // passant avec nom + téléphone : fiche client créée (ou fiche existante retrouvée par le téléphone)
+  if (pp?.name && pp?.phone) {
+    const key = pp.phone.replace(/\D/g, '').slice(-9), ex = S.clients.find(c => String(c.phone || '').replace(/\D/g, '').slice(-9) === key);
+    if (ex) cl = ex;
+    else { const dc = num(S.settings.defCredit); cl = newCl = { id: uid(), name: pp.name, phone: pp.phone, limit: r2(S.settings.mainCur === 'USD' ? dc : dc / S.settings.rate), debt: 0, spent: t.total, last: ts, ts, createdBy: who(), source: 'passant' }; }
+  }
   const no = 'V' + String(d.getFullYear()).slice(2) + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0') + '-' + id.slice(0, 4).toUpperCase();
   const items = L.map(x => ({ pid: x.p.id, name: x.p.name, cat: x.p.cat, unit: x.u.name, factor: x.u.factor, qty: x.qty, price: r2(x.price), cost: r2(x.cost), sup: x.p.supplierId || '' }));
   const cost = r2(sum(L, x => x.cost * x.qty));
   const sale = {
     id, no, ts, day: dayKey(ts), uid: S.user.uid, userName: who(), items, subtotal: r2(t.sub), discount: t.discAmt, discPct: t.disc, total: t.total,
     pay, rate: S.settings.rate, rateDate: S.settings.rateDate || '', mainCur: S.settings.mainCur, due: pay.credit > 0 ? (ck.due || addDays(dayKey(), S.settings.creditDays || 30)) : '',
-    clientId: cl?.id || '', clientName: cl?.name || (passant ? 'Passant' + (pnm ? ' — ' + pnm : '') : ''), status: 'ok', cost, profit: r2(t.total - cost)
+    clientId: cl?.id || '', clientName: cl?.name || (passant ? 'Passant' + (pnm ? ' — ' + pnm : '') : ''), status: 'ok', cost, profit: r2(t.total - cost), ...(passant && cl ? { clientPhone: cl.phone || '' } : {})
   };
   const b = batch();
   b.set('sales', id, sale);
   for (const pid in need) b.upd('products', pid, { qty: inc(-need[pid]) });
   [['usd', 'USD'], ['cdf', 'CDF'], ['mm', 'MM'], ['mmc', 'MMC'], ['bank', 'BANK']].forEach(([k, acc]) => { if (pay[k] > 0) cashop(b, 'sale', acc, pay[k], 'Vente ' + no, id); });
-  if (cl) b.upd('clients', cl.id, { debt: inc(pay.credit), spent: inc(t.total), last: ts });
+  if (newCl) b.set('clients', newCl.id, newCl); else if (cl) b.upd('clients', cl.id, { debt: inc(pay.credit), spent: inc(t.total), last: ts });
   jr(b, 'Vente', `Vente ${no} — ${items.length} article(s)${cl ? ' — ' + cl.name : ''}`, t.total, 'USD', '', id);
+  if (newCl) jr(b, 'Client', `Fiche client créée automatiquement depuis un passant : ${newCl.name} (${newCl.phone}) — vente ${no} (par ${who()})`, null, '', '', newCl.id);
   b.commit();
   cart = []; ck = freshCk();
-  w.close(); toast('Vente enregistrée'); views.sales($('#view')); showReceipt(sale);
+  w.close(); toast(newCl ? 'Vente enregistrée — fiche client créée : ' + newCl.name : 'Vente enregistrée'); views.sales($('#view')); showReceipt(sale);
 }
 
 function receiptHtml(s) {
   const p = s.pay || {}, f = n => fmAt(n, s.rate);
-  return `<div class="receipt"><div class="rc-h">${logo(46)}<br><b>${esc(S.settings.shop)}</b><div>${esc(S.settings.addr || '')} ${esc(S.settings.phone || '')}</div><div>Reçu N° ${s.no}${s.status === 'cancelled' ? ' (ANNULÉ)' : ''}</div><div>${fmtDate(s.ts)} — ${esc(s.userName)}</div>${s.clientName ? `<div>Client : ${esc(s.clientName)}</div>` : ''}</div>
+  return `<div class="receipt"><div class="rc-h">${logo(46)}<br><b>${esc(S.settings.shop)}</b><div>${esc(S.settings.addr || '')} ${esc(S.settings.phone || '')}</div><div>Reçu N° ${s.no}${s.status === 'cancelled' ? ' (ANNULÉ)' : ''}</div><div>${fmtDate(s.ts)} — ${esc(s.userName)}</div>${s.clientName ? `<div>Client : ${esc(s.clientName)}${s.clientPhone ? ' — ' + esc(s.clientPhone) : ''}</div>` : ''}</div>
   <table>${s.items.map(i => `<tr><td colspan="2">${esc(i.name)}</td></tr><tr><td>${i.qty} ${esc(i.unit)} × ${f(i.price)}</td><td style="text-align:right">${f(i.qty * i.price)}</td></tr>`).join('')}</table>
   <div class="rc-t"><div><span>Sous-total</span><span>${f(s.subtotal)}</span></div>${s.discount ? `<div><span>Remise (${s.discPct}%)</span><span>−${f(s.discount)}</span></div>` : ''}
   <div><b>TOTAL</b><b>${f(s.total)}</b></div><div><span>≈</span><span>${(s.mainCur || 'CDF') === 'USD' ? cdf(s.total * (s.rate || S.settings.rate)) : usdx(s.total)}</span></div>
@@ -1392,9 +1405,43 @@ A.pview = d => {
     <div class="tw" style="margin:10px 0"><table class="tbl"><thead><tr><th>Produit</th><th>Qté</th><th>Prix unit.</th><th>Total</th></tr></thead><tbody>${p.items.map(i => `<tr><td>${esc(i.name)}</td><td>${i.qty} ${esc(i.unit)}</td><td>${money(i.cost, pc)}</td><td>${money(i.qty * i.cost, pc)}</td></tr>`).join('')}</tbody></table></div>
     <div class="mi"><span>Sous-total</span><b>${money(p.itemsTotalN ?? p.itemsTotal, pc)}</b></div><div class="mi"><span>Transport</span><b>${money(p.transportN ?? p.transport, pc)}</b></div><div class="mi"><span>TOTAL</span><b>${money(p.totalN ?? p.total, pc)}</b></div>${attHtml(p.proof)}`);
 };
-const plRow = pc => `<div class="pl"><select class="pl-p"><option value="">Produit…</option>${S.products.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select><select class="pl-u"></select>
+const prodsFor = sid => [...S.products].filter(p => !sid || p.supplierId === sid).sort((a, b) => a.name.localeCompare(b.name));
+const plRow = sid => `<div class="pl"><select class="pl-p"><option value="">Produit…</option>${prodsFor(sid).map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select><select class="pl-u"></select>
   <input class="pl-q" type="number" step="any" min="0" placeholder="Qté" inputmode="decimal"><input class="pl-c" type="number" step="any" min="0" placeholder="Prix" inputmode="decimal"><b class="pl-s">0</b><button type="button" class="x" data-act="delrow">✕</button></div>`;
-A.addpl = () => $('#plines')?.insertAdjacentHTML('beforeend', plRow());
+A.addpl = (d, b) => $('#plines')?.insertAdjacentHTML('beforeend', plRow(b?.closest('form')?.supplier?.value || ''));
+// ne propose que les articles du fournisseur choisi ; retire les lignes d'un autre fournisseur
+function fillProds(f) {
+  const sid = f.supplier.value, sup = S.suppliers.find(s => s.id === sid), L = prodsFor(sid); let reset = 0;
+  $$('.pl', f).forEach(r => {
+    const sp = r.querySelector('.pl-p'), cur = sp.value, ok = !cur || L.some(p => p.id === cur);
+    sp.innerHTML = '<option value="">Produit…</option>' + L.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+    if (ok) sp.value = cur; else { reset++; sp.value = ''; r.querySelector('.pl-u').innerHTML = ''; r.querySelector('.pl-c').value = ''; r.querySelector('.pl-q').value = ''; }
+  });
+  const info = $('#supinfo', f), btn = $('#attbtn', f);
+  if (info) info.textContent = sup ? (L.length ? `${L.length} article(s) rattaché(s) à ${sup.name} — seuls ces articles sont proposés.` : `Aucun article n'est rattaché à ${sup.name} : utilisez « Rattacher un autre article à ce fournisseur ».`) : '';
+  if (btn) btn.style.display = sup ? '' : 'none';
+  if (reset) toast(`${reset} ligne(s) retirée(s) : article(s) d'un autre fournisseur`);
+}
+// rattachement explicite d'un article à un fournisseur (confirmation si l'article appartient déjà à un autre)
+A.attachprod = (d, btn) => {
+  const f = btn.closest('form'), sid = f.supplier.value, sup = S.suppliers.find(s => s.id === sid);
+  if (!sup) return toast("Choisissez d'abord un fournisseur", 'err');
+  const cand = S.products.filter(p => p.supplierId !== sid).sort((a, b) => a.name.localeCompare(b.name));
+  if (!cand.length) return toast('Tous les produits sont déjà rattachés à ce fournisseur', 'err');
+  const w = modal('Rattacher un article à ' + sup.name, `<div class="hint">L'article choisi sera désormais associé à <b>${esc(sup.name)}</b> (modification enregistrée dans l'historique).</div>
+    <label class="frm">Article<select id="atp">${cand.map(p => `<option value="${p.id}">${esc(p.name)}${p.supplierId ? ' — actuellement : ' + esc(S.suppliers.find(s => s.id === p.supplierId)?.name || 'autre fournisseur') : ' — sans fournisseur'}</option>`).join('')}</select></label>
+    <div class="row end"><button class="btn ghost" data-close>Annuler</button><button class="btn" id="atok">Rattacher</button></div>`);
+  $('#atok', w).onclick = async () => {
+    const p = S.products.find(x => x.id === $('#atp', w).value); if (!p) return;
+    const old = p.supplierId ? S.suppliers.find(s => s.id === p.supplierId)?.name || 'autre fournisseur' : '';
+    if (old && !await confirmBox(`« ${esc(p.name)} » est actuellement rattaché à <b>${esc(old)}</b>. Le rattacher à <b>${esc(sup.name)}</b> ?`, 'Rattacher')) return;
+    const b = batch(); b.upd('products', p.id, { supplierId: sid, updated: Date.now(), updatedBy: who() });
+    jr(b, 'Modification produit', `Produit ${p.name} rattaché au fournisseur ${sup.name}${old ? ' (avant : ' + old + ')' : ''} par ${who()}`, null, '', '', p.id); b.commit();
+    p.supplierId = sid; w.close(); fillProds(f);
+    const free = $$('.pl', f).find(r => !r.querySelector('.pl-p').value); if (free) { free.querySelector('.pl-p').value = p.id; free.querySelector('.pl-p').dispatchEvent(new Event('change', { bubbles: true })); }
+    toast('Article rattaché à ' + sup.name);
+  };
+};
 function readLines(f) {
   return [...f.querySelectorAll('.pl')].map(r => {
     const p = S.products.find(x => x.id === r.querySelector('.pl-p').value); if (!p) return null;
@@ -1407,23 +1454,27 @@ A.newpurchase = () => {
   const mc = mcur(), accs = accOptions();
   form('Nouvelle entrée de stock', `
     ${sel('Fournisseur', 'supplier', [['', '— Aucun —'], ...S.suppliers.map(s => [s.id, s.name])])}
+    <div class="muted sm" id="supinfo"></div><button type="button" class="btn ghost sm" id="attbtn" data-act="attachprod" style="display:none">${ic('plus', 16)} Rattacher un autre article à ce fournisseur</button>
     ${sel('Devise des prix saisis', 'pcur', CURS, mc)}
     <div id="plines">${plRow()}</div><button type="button" class="btn ghost sm" data-act="addpl">${ic('plus', 16)} Ajouter un produit</button>
     <div class="two">${fld('Frais de transport', 'transport', 0, 'number', 'min="0"')}${fld('Date', 'date', dayKey(), 'date')}</div>
     <div class="two">${sel('Paiement', 'payType', [['cash', 'Cash (déduit la caisse)'], ['credit', 'Crédit (dette fournisseur)']])}<label id="accl">Compte de paiement<select name="acc">${accs.map(([k, t]) => `<option value="${k}">${t}</option>`).join('')}</select></label></div>
     <label id="duel" style="display:none">Échéance de paiement<input type="date" name="due" value="${addDays(dayKey(), 30)}"></label>
     ${fld('Observation', 'note', '')}<label>Justificatif (photo ou PDF, facultatif)<input type="file" id="pjust" accept="image/*,application/pdf" capture="environment"></label>
+    <p class="neg" id="liq" style="display:none;font-weight:600;margin:6px 0"></p>
     <div class="totbox"><div class="row sp"><span>TOTAL</span><b id="ptot" class="big">0</b></div><div class="muted sm" id="ptot2"></div></div>`,
     async (v, w, f) => {
       const L = readLines(f).filter(l => l.qty > 0); if (!L.length) throw new Error('Ajoutez au moins un produit avec une quantité');
       const supplier = S.suppliers.find(s => s.id === v.supplier), pc = v.pcur, T = x => toUSDs(x, pc, supplier);
       if (v.payType === 'credit' && !supplier) throw new Error('Choisissez un fournisseur pour un achat à crédit');
       if (v.payType === 'cash' && !v.acc) throw new Error('Aucun mode de paiement disponible : activez-en un dans les paramètres');
+      if (supplier) { const bad = L.find(l => l.p.supplierId !== supplier.id); if (bad) throw new Error(`« ${bad.p.name} » n'est pas rattaché à ${supplier.name} : utilisez « Rattacher un autre article à ce fournisseur »`); }
       const transportN = num(v.transport), itemsN = sum(L, l => l.qty * l.cost), totalN = itemsN + transportN;
       const itemsTotal = r2(T(itemsN)), transport = r2(T(transportN)), total = r2(itemsTotal + transport);
       const id = uid(), ts = dateTs(v.date), proof = await readAttach($('#pjust', w).files[0]);
       const items = L.map(l => ({ pid: l.p.id, name: l.p.name, unit: l.u.name, factor: l.u.factor, qty: l.qty, cost: r2(l.cost), costUSD: r2(T(l.cost)) }));
       const payAmt = v.payType === 'cash' ? (nat(v.acc) === pc ? totalN : fromUSDs(total, v.acc, supplier)) : 0;
+      if (v.payType === 'cash') { const bal = balances()[v.acc] || 0; if (bal < payAmt - 1e-9) throw new Error(`Fonds insuffisants (${ACC[v.acc][0]}) : solde ${money(bal, v.acc)}, à décaisser ${money(payAmt, v.acc)} — il manque ${money(payAmt - bal, v.acc)}. Livraison cash bloquée.`); }
       const b = batch();
       b.set('purchases', id, { id, ts, day: dayKey(ts), supplierId: supplier?.id || '', supplierName: supplier?.name || '', items, itemsTotal, transport, total, itemsTotalN: r2(itemsN), transportN: r2(transportN), totalN: r2(totalN), pcur: pc,
         rate: supRate(supplier), rateDate: (+supplier?.rate > 0 ? supplier.rateDate : S.settings.rateDate) || '', supplierRate: +supplier?.rate > 0, payType: v.payType, acc: v.payType === 'cash' ? v.acc : '', cur: v.payType === 'cash' ? nat(v.acc) : '', due: v.payType === 'credit' ? v.due : '', note: v.note, proof, uid: S.user.uid, userName: who() });
@@ -1437,7 +1488,6 @@ A.newpurchase = () => {
       else b.upd('suppliers', supplier.id, { debt: inc(total), bought: inc(total), last: ts });
       if (supplier && v.payType === 'cash') b.upd('suppliers', supplier.id, { bought: inc(total), last: ts });
       jr(b, 'Entrée stock', `Approvisionnement ${supplier?.name || ''} — ${items.length} produit(s) — ${v.payType === 'credit' ? 'crédit' : 'cash ' + ACC[v.acc][0]}`, total, 'USD', '', id);
-      if (v.payType === 'cash' && balances()[v.acc] < payAmt) toast('Attention : le solde de ce compte devient négatif', 'err');
       b.commit(); toast('Entrée enregistrée, stock mis à jour');
     }, {
       wide: true, ok: "Enregistrer l'entrée",
@@ -1449,6 +1499,8 @@ A.newpurchase = () => {
           $('#ptot', w).textContent = money(tN, pcur()); const sup = S.suppliers.find(x => x.id === f.supplier.value);
           $('#ptot2', w).textContent = '≈ ' + usdx(toUSDs(tN, pcur(), sup)) + ' · taux ' + (+sup?.rate > 0 ? 'du fournisseur' : 'général') + ' : 1 $ = ' + supRate(sup).toLocaleString('fr-FR') + ' FC';
           $('#accl', w).style.display = f.payType.value === 'cash' ? '' : 'none'; $('#duel', w).style.display = f.payType.value === 'credit' ? '' : 'none';
+          const liq = $('#liq', w), payA = nat(f.acc.value) === pcur() ? tN : fromUSDs(toUSDs(tN, pcur(), sup), f.acc.value, sup), balA = balances()[f.acc.value] || 0, low = f.payType.value === 'cash' && !!f.acc.value && tN > 0 && balA < payA - 1e-9;
+          if (liq) { liq.style.display = low ? '' : 'none'; if (low) liq.textContent = `⚠ Fonds insuffisants en caisse (${ACC[f.acc.value][0]}) : solde ${money(balA, f.acc.value)}, à décaisser ${money(payA, f.acc.value)}. L'enregistrement sera bloqué.`; }
         };
         const setPrice = r => {
           const p = S.products.find(x => x.id === r.querySelector('.pl-p').value), u = p && allUnits(p).find(x => x.name === r.querySelector('.pl-u').value);
@@ -1459,11 +1511,11 @@ A.newpurchase = () => {
             const r = e.target.closest('.pl'), p = S.products.find(x => x.id === e.target.value);
             r.querySelector('.pl-u').innerHTML = (p ? allUnits(p) : []).map(u => `<option>${esc(u.name)}</option>`).join(''); setPrice(r);
           } else if (e.target.classList.contains('pl-u')) setPrice(e.target.closest('.pl'));
-          else if (e.target.name === 'pcur' || e.target.name === 'supplier') $$('.pl', f).forEach(setPrice);
+          else if (e.target.name === 'pcur' || e.target.name === 'supplier') { if (e.target.name === 'supplier') fillProds(f); $$('.pl', f).forEach(setPrice); }
           else if (e.target.name === 'payType') { /* affichage mis à jour par calc */ }
           calc();
         });
-        f.addEventListener('input', calc); f.addEventListener('click', () => setTimeout(calc)); calc();
+        f.addEventListener('input', calc); f.addEventListener('click', () => setTimeout(calc)); fillProds(f); calc();
       }
     });
 };
@@ -1820,6 +1872,12 @@ const jf = { from: '', to: '', user: '', type: '', cat: '', q: '' };
 let jlimit = 15;
 const JIC = { 'Vente': ['blue', 'cart'], 'Entrée stock': ['yellow', 'box'], 'Sortie stock': ['orange', 'box'], 'Dépense': ['orange', 'wallet'], 'Annulation': ['red', 'trash'], 'Inventaire': ['green', 'clip'], 'Connexion': ['gray', 'users'], 'Justification': ['blue', 'chat'] };
 const jsign = j => ['Vente', 'Encaissement', 'Dépôt', 'Remboursement'].includes(j.type) ? '+' : ['Dépense', 'Décaissement', 'Retrait', 'Annulation', 'Paiement dette'].includes(j.type) ? '−' : '';
+// Historique : tous les montants et prix sont affichés en CDF (conversion automatique au taux de l'opération, sinon au taux courant)
+const jrate = j => { const r = j.ref; return (r && (S.sales.find(x => x.id === r)?.rate || S.purchases.find(x => x.id === r)?.rate || S.cashops.find(o => o.ref === r && Math.abs(o.ts - j.ts) < 120000)?.rate)) || S.settings.rate; };
+const jcdf = j => cdf(Math.abs(nat(j.cur) === 'CDF' ? j.amt : j.amt * jrate(j)));
+const jamt = (j, sg = jsign(j)) => j.amt == null ? '' : sg + (j.cur ? jcdf(j) : j.amt);
+const jnum = j => j.amt == null ? '' : j.cur ? Math.round(nat(j.cur) === 'CDF' ? j.amt : j.amt * jrate(j)) : j.amt;
+const jdesc = j => { const rt = jrate(j); return String(j.desc || '').replace(/\$\s?(\d[\d\s\u202f\u00a0]*(?:[.,]\d+)?)/g, (m, g) => { const v = parseFloat(g.replace(/[\s\u202f\u00a0]/g, '').replace(',', '.')); return isFinite(v) ? cdf(v * rt) : m; }); };
 const SENSITIVE = ['Annulation', 'Sortie stock', 'Retrait', 'Décaissement', 'Dépense', 'Produit supprimé', 'Modification produit', 'Inventaire'];
 const JST = { pending: ['warn', 'En attente'], justified: ['', 'Justifié'], accepted: ['', 'Accepté'], rejected: ['bad', 'Rejeté'] };
 views.journal = el => {
@@ -1833,9 +1891,9 @@ views.journal = el => {
     <label>Type<select data-jf="type"><option value="">Tous</option>${types.map(u => `<option ${u === jf.type ? 'selected' : ''}>${esc(u)}</option>`).join('')}</select></label></div>
     <div class="two"><label>Catégorie<select data-jf="cat"><option value="">Toutes</option>${cats.map(u => `<option ${u === jf.cat ? 'selected' : ''}>${esc(u)}</option>`).join('')}</select></label><label>Recherche<input class="in" data-jf="q" value="${esc(jf.q)}"></label></div></div></details>
     <div class="card jlist">${L.map(j => { const [col, ico] = JIC[j.type] || ['gray', 'clock'], sg = jsign(j), js = j.ref ? S.justifs.find(x => x.refId === j.ref) : null;
-      return `<div class="jrow"><span class="jic ${col}">${ic(ico, 20)}</span><div class="jm"><b>${esc(j.type)} <small class="muted">par ${esc(j.user)}</small></b><small>${fmtDate(j.ts)}</small><small class="jd">${esc(j.desc)} · <span class="muted">${j.id.slice(0, 8)}</span>${rcptLink(j.desc)}</small>
+      return `<div class="jrow"><span class="jic ${col}">${ic(ico, 20)}</span><div class="jm"><b>${esc(j.type)} <small class="muted">par ${esc(j.user)}</small></b><small>${fmtDate(j.ts)}</small><small class="jd">${esc(jdesc(j))} · <span class="muted">${j.id.slice(0, 8)}</span>${rcptLink(j.desc)}</small>
       ${js ? `<small><span class="badge ${JST[js.status]?.[0]}">${JST[js.status]?.[1] || js.status}</span></small>` : SENSITIVE.includes(j.type) ? `<small><a href="#" data-act="jjust" data-id="${j.id}">Ajouter une justification</a></small>` : ''}</div>
-      <b class="jamt ${sg === '+' ? 'pos' : sg === '−' ? 'neg' : ''}">${j.amt == null ? '' : sg + (j.cur ? money(Math.abs(j.amt), j.cur) : j.amt)}</b></div>`; }).join('') || '<p class="muted">Aucune opération.</p>'}
+      <b class="jamt ${sg === '+' ? 'pos' : sg === '−' ? 'neg' : ''}">${jamt(j, sg)}</b></div>`; }).join('') || '<p class="muted">Aucune opération.</p>'}
     ${all.length > jlimit ? `<button class="btn ghost" style="width:100%;justify-content:center;margin-top:8px" data-act="jmore">Voir plus (${all.length - jlimit})</button>` : ''}</div>
     <p class="muted sm">Journal en lecture seule : aucune ligne ne peut être modifiée. Chaque ligne porte le nom de la personne qui a agi.${isAdmin() ? ' Administrateur : appui long sur une ligne pour tout effacer.' : ''}</p>`);
 };
@@ -1874,7 +1932,7 @@ A.jmore = () => { jlimit += 25; views.journal($('#view')); };
 A.jtype = d => { jf.type = d.t; jlimit = 15; views.journal($('#view')); };
 A.jjust = d => { const j = S.journal.find(x => x.id === d.id); if (j) askJustif('journal', j.ref || j.id, j.type + ' : ' + j.desc); };
 document.addEventListener('change', e => { const k = e.target.dataset?.jf; if (k) { jf[k] = e.target.value; views.journal($('#view')); } });
-A.jexp = () => exportXLSX('Journal des opérations', ['ID', 'Date', 'Utilisateur', 'Type', 'Montant', 'Devise', 'Description'], S.journal.map(j => [j.id, fmtDate(j.ts), j.user, j.type, j.amt ?? '', j.cur, j.desc]));
+A.jexp = () => exportXLSX('Journal des opérations', ['ID', 'Date', 'Utilisateur', 'Type', 'Montant', 'Devise', 'Description'], S.journal.map(j => [j.id, fmtDate(j.ts), j.user, j.type, jnum(j), j.amt != null && j.cur ? 'CDF' : '', jdesc(j)]));
 
 /* ================= RAPPORTS ================= */
 const rp = { type: 'synth', from: rangeFor('month')[0], to: rangeFor('month')[1] };
@@ -1937,7 +1995,20 @@ A.rper = d => { [rp.from, rp.to] = rangeFor(d.p); views.reports($('#view')); };
 A.rpdf = () => { const r = buildReport(rp.type, rp.from, rp.to); exportPDF(r.title, r.head, r.rows, r.summary); };
 A.rxls = () => { const r = buildReport(rp.type, rp.from, rp.to); exportXLSX(r.title, r.head, r.rows, r.summary); };
 A.rcsv = () => { const r = buildReport(rp.type, rp.from, rp.to); exportCSV(r.title, r.head, r.rows); };
-A.rppt = () => exportPPTX();
+let pptxP;
+const loadPPTX = () => pptxP ??= new Promise((ok, ko) => {
+  if (window.PptxGenJS) return ok();
+  const urls = ['https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js', 'https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js', 'https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js']; let i = 0;
+  const next = () => {
+    if (i >= urls.length) { pptxP = null; return ko(new Error('chargement impossible')); }
+    const sc = document.createElement('script'); sc.src = urls[i++]; sc.onload = () => window.PptxGenJS ? ok() : (sc.remove(), next()); sc.onerror = () => { sc.remove(); next(); }; document.head.appendChild(sc);
+  };
+  next();
+});
+A.rppt = async () => {
+  if (!window.PptxGenJS) { toast('Chargement de la bibliothèque PowerPoint…'); try { await loadPPTX(); } catch { return toast("Bibliothèque PowerPoint introuvable : vérifiez la connexion (ou le blocage du service worker) puis réessayez", 'err'); } }
+  exportPPTX();
+};
 /* ---------- Exportation PowerPoint multi-modules ---------- */
 function exportPPTX() {
   if (!window.PptxGenJS) return toast('Export PowerPoint indisponible (bibliothèque non chargée — connectez-vous à Internet une fois)', 'err');
@@ -2036,7 +2107,7 @@ function exportPPTX() {
     tableSlides('Caisse — opérations', 'Période : ' + per, r.head, r.rows, [['Opérations', r.rows.length]]); count += 2; }
   /* Historique */
   if (can('journal')) { const L = S.journal.filter(j => inR(j.ts)).sort((a, b) => b.ts - a.ts);
-    tableSlides('Historique', 'Période : ' + per, ['Date', 'Utilisateur', 'Type', 'Montant', 'Description'], L.map(j => { const sg = jsign(j); return [fmtDate(j.ts), j.user || '', j.type, j.amt == null ? '' : sg + (j.cur ? money(Math.abs(j.amt), j.cur) : j.amt), j.desc || '']; }), [['Opérations', L.length]]); count++; }
+    tableSlides('Historique', 'Période : ' + per, ['Date', 'Utilisateur', 'Type', 'Montant', 'Description'], L.map(j => { const sg = jsign(j); return [fmtDate(j.ts), j.user || '', j.type, jamt(j, sg), jdesc(j)]; }), [['Opérations', L.length]]); count++; }
 
   /* sommaire */
   sommaire.addTable(toc.map(([name, no], i) => [{ text: String(i + 1).padStart(2, '0') + '   ' + name, options: { fontSize: 15, color: TX, bold: true, fill: { color: i % 2 ? 'FFFFFF' : LIGHT } } }, { text: 'diapositive ' + no, options: { fontSize: 12, color: MU, align: 'right', fill: { color: i % 2 ? 'FFFFFF' : LIGHT } } }]),
