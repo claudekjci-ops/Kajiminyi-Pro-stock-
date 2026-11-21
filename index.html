@@ -303,6 +303,7 @@ a,img,button{-webkit-user-drag:none;-webkit-touch-callout:none}
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAnalytics, isSupported } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics.js";
@@ -1703,9 +1704,66 @@ A.pdetail = d => {
     ${debt > 0.004 ? `<div class="row end"><button class="btn orange" id="paydebt">${isC ? 'Encaisser un remboursement' : 'Payer le fournisseur'}</button></div>` : ''}
     ${open.length ? `<h3 style="margin-top:12px">Échéances</h3>${open.map(o => `<div class="mi"><span>${isC ? o.s.no : fmtDate(o.p.ts)} — échéance ${o.due || '—'}</span><b class="${o.due && o.due < dayKey() ? 'neg' : ''}">${U(o.left)}</b></div>`).join('')}` : ''}
     <h3 style="margin-top:12px">${isC ? 'Historique des achats' : 'Historique des approvisionnements'}</h3>${hist.slice(0, 25).map(h => `<div class="mi"><span>${fmtDate(h.ts)} ${isC ? h.no : ''}</span><b>${U(h.total)}</b></div>`).join('') || '<p class="muted">Aucun.</p>'}
-    <h3 style="margin-top:12px">Remboursements / règlements</h3>${pays.map(o => `<div class="mi"><span>${fmtDate(o.ts)} · ${esc(o.user || '')}${o.rcvName ? '<br><small class="muted">Reçu par <b>' + esc(o.rcvName) + '</b></small>' : ''}</span><b>${money(Math.abs(o.amt), o.cur)}</b>${o.rcvSig ? `<img src="${o.rcvSig}" alt="Signature" class="sigimg" data-act="sigview" data-id="${o.id}">` : ''}</div>`).join('') || '<p class="muted">Aucun.</p>'}
+    <h3 style="margin-top:12px">Remboursements / règlements</h3>${pays.map(o => `<div class="mi"><span>${fmtDate(o.ts)} · ${esc(o.user || '')}${o.rcvName ? '<br><small class="muted">Reçu par <b>' + esc(o.rcvName) + '</b></small>' : ''}${o.rcpt ? '<br><small><a href="#" data-act="rcptview" data-no="' + esc(o.rcpt.no) + '">Reçu ' + esc(o.rcpt.no) + '</a></small>' : ''}</span><b>${money(Math.abs(o.amt), o.cur)}</b>${o.rcvSig ? `<img src="${o.rcvSig}" alt="Signature" class="sigimg" data-act="sigview" data-id="${o.id}">` : ''}</div>`).join('') || '<p class="muted">Aucun.</p>'}
     ${isC && x.phone && debt > 0.004 ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="https://wa.me/${String(x.phone).replace(/\D/g, '')}?text=${encodeURIComponent('Bonjour ' + x.name + ', rappel : votre solde chez ' + S.settings.shop + ' est de ' + usd(debt) + '.')}">Envoyer un rappel WhatsApp</a>` : ''}`, { wide: true });
   $('#paydebt', w)?.addEventListener('click', () => { w.close(); payDebt(x, isC, k); });
+};
+/* ---------- Reçus de règlement (clients & fournisseurs) : preuve et traçabilité ---------- */
+const RCACHE = {};
+const rcptFind = no => S.cashops.find(o => o.rcpt?.no === no) || RCACHE[no];
+function newRcptNo(isC) {
+  const used = new Set(S.cashops.map(o => o.rcpt?.no).filter(Boolean));
+  let no;
+  do { no = (isC ? 'RC-' : 'RF-') + dayKey().replace(/-/g, '') + '-' + uid().replace(/-/g, '').slice(0, 6).toUpperCase(); } while (used.has(no));
+  return no;
+}
+const rcptLink = desc => { const m = String(desc || '').match(/\b(R[CF]-\d{8}-[A-Z0-9]{6})\b/); return m ? ` · <a href="#" data-act="rcptview" data-no="${m[1]}">Reçu ${m[1]}</a>` : ''; };
+function rcptHtml(o) {
+  const r = o.rcpt, isC = r.type === 'client', f = n => fmAt(n, r.rate);
+  return `<div class="receipt"><div class="rc-h">${logo(46)}<br><b>${esc(S.settings.shop)}</b><div>${esc(S.settings.addr || '')} ${esc(S.settings.phone || '')}</div>
+    <div><b>REÇU DE ${isC ? 'PAIEMENT CLIENT' : 'RÈGLEMENT FOURNISSEUR'}</b></div><div>Réf. ${esc(r.no)}</div><div>${fmtDate(o.ts)}</div></div>
+    <div class="rc-t" style="border-top:0;margin-top:0;padding-top:0">
+    <div><span>${isC ? 'Client' : 'Fournisseur'}</span><b>${esc(r.party)}</b></div>
+    <div><span>Montant ${isC ? 'reçu' : 'payé'}</span><b>${money(Math.abs(o.amt), o.cur)}</b></div>
+    <div><span>Mode de paiement</span><span>${esc(ACC[o.cur]?.[0] || o.cur)}</span></div>
+    <div><span>Solde avant</span><span>${f(r.before)}</span></div>
+    <div><span>Solde après</span><b>${f(r.after)}</b></div>
+    <div><span>Opérateur</span><span>${esc(o.user || '')}</span></div>
+    ${o.rcvName ? `<div><span>Reçu par</span><span>${esc(o.rcvName)}</span></div>` : ''}
+    <div><small>Taux : 1 $ = ${(+r.rate || S.settings.rate).toLocaleString('fr-FR')} FC</small></div></div>
+    ${o.rcvSig ? `<div style="text-align:center;margin-top:6px"><small>Signature</small><br><img src="${o.rcvSig}" alt="Signature" style="max-width:100%;height:60px;object-fit:contain"></div>` : ''}
+    <p style="text-align:center;margin:8px 0 0">${esc(S.settings.footer || '')}</p></div>`;
+}
+function rcptText(o) {
+  const r = o.rcpt, isC = r.type === 'client', f = n => fmAt(n, r.rate);
+  return `${S.settings.shop}\nREÇU DE ${isC ? 'PAIEMENT CLIENT' : 'RÈGLEMENT FOURNISSEUR'} ${r.no}\n${fmtDate(o.ts)}\n${isC ? 'Client' : 'Fournisseur'} : ${r.party}\nMontant : ${money(Math.abs(o.amt), o.cur)} (${ACC[o.cur]?.[0] || o.cur})\nSolde avant : ${f(r.before)}\nSolde après : ${f(r.after)}\nOpérateur : ${o.user || ''}${o.rcvName ? '\nReçu par : ' + o.rcvName : ''}\n${S.settings.footer || ''}`;
+}
+function rcptPDF(o) {
+  const J = window.jspdf?.jsPDF;
+  if (!J) return toast('Export PDF indisponible (bibliothèque non chargée — connectez-vous à Internet une fois)', 'err');
+  const r = o.rcpt, isC = r.type === 'client', f = n => fmAt(n, r.rate).replace(/[\u202f\u00a0]/g, ' ');
+  const d = new J({ unit: 'mm', format: [80, 160] }); let y = 10;
+  const ctr = (tx, sz = 9, bold = false) => { d.setFontSize(sz); d.setFont('helvetica', bold ? 'bold' : 'normal'); d.text(String(tx), 40, y, { align: 'center', maxWidth: 70 }); y += sz * 0.45 + 2; };
+  const row = (a, b) => { d.setFontSize(8.5); d.setFont('helvetica', 'normal'); d.text(a, 5, y); d.setFont('helvetica', 'bold'); d.text(String(b).replace(/[\u202f\u00a0]/g, ' '), 75, y, { align: 'right', maxWidth: 45 }); y += 6; };
+  ctr(S.settings.shop, 12, true); if (S.settings.addr || S.settings.phone) ctr((S.settings.addr || '') + ' ' + (S.settings.phone || ''), 8);
+  ctr('RECU DE ' + (isC ? 'PAIEMENT CLIENT' : 'REGLEMENT FOURNISSEUR'), 9, true); ctr('Réf. ' + r.no, 9); ctr(fmtDate(o.ts), 8); y += 2;
+  d.setDrawColor(150); d.line(5, y - 3, 75, y - 3);
+  row(isC ? 'Client' : 'Fournisseur', r.party); row('Montant ' + (isC ? 'reçu' : 'payé'), money(Math.abs(o.amt), o.cur)); row('Mode', ACC[o.cur]?.[0] || o.cur);
+  row('Solde avant', f(r.before)); row('Solde après', f(r.after)); row('Opérateur', o.user || ''); if (o.rcvName) row('Reçu par', o.rcvName);
+  if (o.rcvSig) { try { d.addImage(o.rcvSig, 'PNG', 20, y, 40, 16); y += 18; } catch { /* signature illisible */ } }
+  y += 2; ctr(S.settings.footer || '', 8);
+  d.save(r.no + '.pdf');
+}
+function showRcpt(o) {
+  RCACHE[o.rcpt.no] = o;
+  modal('Reçu ' + o.rcpt.no, `${rcptHtml(o)}<div class="row end"><button class="btn ghost" data-act="rcptshare" data-no="${esc(o.rcpt.no)}">Partager</button><button class="btn ghost" data-act="rcptpdf" data-no="${esc(o.rcpt.no)}">PDF</button><button class="btn" onclick="window.print()">Imprimer</button></div>`);
+}
+A.rcptview = d => { const o = rcptFind(d.no); if (o) showRcpt(o); else toast('Reçu introuvable', 'err'); };
+A.rcptpdf = d => { const o = rcptFind(d.no); if (o) rcptPDF(o); };
+A.rcptshare = async d => {
+  const o = rcptFind(d.no); if (!o) return; const text = rcptText(o);
+  try { if (navigator.share) await navigator.share({ title: 'Reçu ' + d.no, text }); else window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank'); }
+  catch { /* annulé */ }
 };
 let pad = null;
 function payDebt(x, isC, k) {
@@ -1723,9 +1781,13 @@ function payDebt(x, isC, k) {
       if (pad.empty()) throw new Error('La signature de la personne est obligatoire');
       extra = { rcvName: rcv, rcvSig: pad.data() };
     }
-    const b = batch(); cashop(b, isC ? 'debt_client' : 'debt_supplier', v.acc, isC ? amt : -amt, (isC ? 'Remboursement ' : 'Paiement ') + x.name, x.id, Date.now(), extra);
+    const ts = Date.now(), paid = Math.min(au, x.debt), before = r2(x.debt), after = r2(Math.max(0, x.debt - paid));
+    const rcpt = { no: newRcptNo(isC), type: isC ? 'client' : 'supplier', partyId: x.id, party: x.name, before, after: after < 0.005 ? 0 : after, rate: isC ? S.settings.rate : supRate(x) };
+    extra = { ...extra, rcpt };
+    const b = batch(); cashop(b, isC ? 'debt_client' : 'debt_supplier', v.acc, isC ? amt : -amt, (isC ? 'Remboursement ' : 'Paiement ') + x.name, x.id, ts, extra);
     b.upd(k, x.id, { debt: inc(-Math.min(au, x.debt)) });
-    jr(b, isC ? 'Remboursement' : 'Paiement dette', `${isC ? 'Remboursement de' : 'Paiement à'} ${x.name} — ${ACC[v.acc][0]}${rcv ? ' — reçu par ' + rcv : ''}`, amt, nat(v.acc), '', x.id); b.commit(); toast('Règlement enregistré');
+    jr(b, isC ? 'Remboursement' : 'Paiement dette', `${isC ? 'Remboursement de' : 'Paiement à'} ${x.name} — ${ACC[v.acc][0]}${rcv ? ' — reçu par ' + rcv : ''} — reçu N° ${rcpt.no}`, amt, nat(v.acc), '', x.id); b.commit(); toast('Règlement enregistré — reçu ' + rcpt.no);
+    showRcpt({ ts, cur: v.acc, amt: nat(v.acc) === 'CDF' ? Math.round(isC ? amt : -amt) : r00(isC ? amt : -amt), user: who(), ...extra });
   }, { onOpen: w => { if (!isC) pad = sigPad(w); } });
 }
 // zone de signature au doigt (image PNG légère enregistrée avec le règlement)
@@ -1771,7 +1833,7 @@ views.journal = el => {
     <label>Type<select data-jf="type"><option value="">Tous</option>${types.map(u => `<option ${u === jf.type ? 'selected' : ''}>${esc(u)}</option>`).join('')}</select></label></div>
     <div class="two"><label>Catégorie<select data-jf="cat"><option value="">Toutes</option>${cats.map(u => `<option ${u === jf.cat ? 'selected' : ''}>${esc(u)}</option>`).join('')}</select></label><label>Recherche<input class="in" data-jf="q" value="${esc(jf.q)}"></label></div></div></details>
     <div class="card jlist">${L.map(j => { const [col, ico] = JIC[j.type] || ['gray', 'clock'], sg = jsign(j), js = j.ref ? S.justifs.find(x => x.refId === j.ref) : null;
-      return `<div class="jrow"><span class="jic ${col}">${ic(ico, 20)}</span><div class="jm"><b>${esc(j.type)} <small class="muted">par ${esc(j.user)}</small></b><small>${fmtDate(j.ts)}</small><small class="jd">${esc(j.desc)} · <span class="muted">${j.id.slice(0, 8)}</span></small>
+      return `<div class="jrow"><span class="jic ${col}">${ic(ico, 20)}</span><div class="jm"><b>${esc(j.type)} <small class="muted">par ${esc(j.user)}</small></b><small>${fmtDate(j.ts)}</small><small class="jd">${esc(j.desc)} · <span class="muted">${j.id.slice(0, 8)}</span>${rcptLink(j.desc)}</small>
       ${js ? `<small><span class="badge ${JST[js.status]?.[0]}">${JST[js.status]?.[1] || js.status}</span></small>` : SENSITIVE.includes(j.type) ? `<small><a href="#" data-act="jjust" data-id="${j.id}">Ajouter une justification</a></small>` : ''}</div>
       <b class="jamt ${sg === '+' ? 'pos' : sg === '−' ? 'neg' : ''}">${j.amt == null ? '' : sg + (j.cur ? money(Math.abs(j.amt), j.cur) : j.amt)}</b></div>`; }).join('') || '<p class="muted">Aucune opération.</p>'}
     ${all.length > jlimit ? `<button class="btn ghost" style="width:100%;justify-content:center;margin-top:8px" data-act="jmore">Voir plus (${all.length - jlimit})</button>` : ''}</div>
@@ -1859,7 +1921,7 @@ function buildReport(type, from, to) {
 }
 views.reports = el => {
   const r = buildReport(rp.type, rp.from, rp.to);
-  el.innerHTML = page('Rapports & analyses', `<button class="btn ghost" data-act="rcsv">CSV</button><button class="btn ghost" data-act="rpdf">${ic('dl', 16)} PDF</button><button class="btn" data-act="rxls">${ic('dl', 16)} Excel</button>`, `
+  el.innerHTML = page('Rapports & analyses', `<button class="btn ghost" data-act="rppt">${ic('dl', 16)} PowerPoint</button><button class="btn ghost" data-act="rcsv">CSV</button><button class="btn ghost" data-act="rpdf">${ic('dl', 16)} PDF</button><button class="btn" data-act="rxls">${ic('dl', 16)} Excel</button>`, `
     <div class="card"><div class="frm"><label>Rapport<select data-rf="type">${REPORTS.map(([k, t]) => `<option value="${k}" ${rp.type === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
     <div class="chips">${[['day', "Aujourd'hui"], ['week', 'Semaine'], ['month', 'Mois'], ['year', 'Année']].map(([k, t]) => `<button type="button" class="chip" data-act="rper" data-p="${k}">${t}</button>`).join('')}</div>
     <div class="two"><label>Du<input class="in" type="date" data-rf="from" value="${iso(rp.from)}"></label><label>Au<input class="in" type="date" data-rf="to" value="${iso(rp.to)}"></label></div></div></div>
@@ -1875,6 +1937,114 @@ A.rper = d => { [rp.from, rp.to] = rangeFor(d.p); views.reports($('#view')); };
 A.rpdf = () => { const r = buildReport(rp.type, rp.from, rp.to); exportPDF(r.title, r.head, r.rows, r.summary); };
 A.rxls = () => { const r = buildReport(rp.type, rp.from, rp.to); exportXLSX(r.title, r.head, r.rows, r.summary); };
 A.rcsv = () => { const r = buildReport(rp.type, rp.from, rp.to); exportCSV(r.title, r.head, r.rows); };
+A.rppt = () => exportPPTX();
+/* ---------- Exportation PowerPoint multi-modules ---------- */
+function exportPPTX() {
+  if (!window.PptxGenJS) return toast('Export PowerPoint indisponible (bibliothèque non chargée — connectez-vous à Internet une fois)', 'err');
+  const from = rp.from, to = rp.to, inR = x => x >= from && x <= to, per = `${iso(from)} au ${iso(to)}`, C = ' (' + mcur() + ')', snap = 'État au ' + dayKey();
+  const mvAt = (n, rate) => S.settings.mainCur === 'USD' ? r00(n) : Math.round(n * (rate || S.settings.rate));
+  const DG = '003B32', GOLD = 'F4C542', LIGHT = 'F4F7F6', TX = '13302B', MU = '6B8480', LINE = 'E1E9E7';
+  const P = new PptxGenJS(); P.layout = 'LAYOUT_WIDE';
+  P.author = who(); P.company = S.settings.shop; P.title = S.settings.shop + ' — Synthèse des données';
+  P.defineSlideMaster({ title: 'KAJ', background: { color: 'FFFFFF' }, objects: [
+    { rect: { x: 0, y: 7.2, w: 13.33, h: 0.3, fill: { color: DG } } },
+    { text: { text: S.settings.shop + ' — ' + per, options: { x: 0.4, y: 7.2, w: 9, h: 0.3, fontSize: 9, color: 'FFFFFF' } } }
+  ], slideNumber: { x: 12.3, y: 7.2, w: 0.7, h: 0.3, fontSize: 9, color: 'FFFFFF' } });
+  let n = 0;
+  const slide = (title, sub = '') => {
+    const s = P.addSlide({ masterName: 'KAJ' }); n++;
+    s.addShape(P.ShapeType.rect, { x: 0, y: 0, w: 13.33, h: 0.9, fill: { color: DG }, line: { color: DG } });
+    s.addShape(P.ShapeType.rect, { x: 0, y: 0, w: 0.18, h: 0.9, fill: { color: GOLD }, line: { color: GOLD } });
+    s.addText(title, { x: 0.45, y: 0.1, w: 8.4, h: 0.7, fontSize: 24, bold: true, color: 'FFFFFF', valign: 'middle', fit: 'shrink' });
+    if (sub) s.addText(sub, { x: 8.9, y: 0.1, w: 4.1, h: 0.7, fontSize: 11, color: 'CFE8E1', align: 'right', valign: 'middle' });
+    return s;
+  };
+  const numLike = v => /\d/.test(String(v)) && /^[−\-+]?\$?[\d\s.,]+(\s?(FC|%))?$/.test(String(v).replace(/\s+/g, ' ').trim());
+  const txt = (v, max) => { let s = typeof v === 'number' ? fnum(v, 2) : String(v ?? ''); s = s.replace(/\s+/g, ' ').trim(); return s.length > max ? s.slice(0, Math.max(1, max - 1)) + '…' : s; };
+  const colW = (head, rows) => {
+    const w = head.map((h, c) => { const L = rows.slice(0, 60).map(r => String(r[c] ?? '').length); const avg = L.length ? sum(L, x => Math.min(x, 30)) / L.length : 0; return Math.min(28, Math.max(6, String(h).length * 0.75, avg)); });
+    const tot = sum(w, x => x); return w.map(x => +(x / tot * 12.33).toFixed(3));
+  };
+  const chips = (s, items, y) => {
+    const L = items.slice(0, 5), cw = (12.33 - (L.length - 1) * 0.15) / L.length;
+    L.forEach(([k, v], i) => {
+      const x = 0.5 + i * (cw + 0.15);
+      s.addShape(P.ShapeType.roundRect, { x, y, w: cw, h: 0.75, fill: { color: LIGHT }, line: { color: LINE, width: 0.75 }, rectRadius: 0.08 });
+      s.addText([{ text: String(k), options: { fontSize: 10, color: MU, breakLine: true } }, { text: String(v), options: { fontSize: 15, bold: true, color: DG } }], { x: x + 0.1, y, w: cw - 0.2, h: 0.75, valign: 'middle', fit: 'shrink' });
+    });
+  };
+  const ROWS = 11, MAXR = 220, toc = [];
+  const tableSlides = (mod, sub, head, rows, summary = []) => {
+    toc.push([mod, n + 1]);
+    const shown = rows.slice(0, MAXR), pages = Math.max(1, Math.ceil(shown.length / ROWS)), w = colW(head, shown);
+    const right = head.map((h, c) => { const vals = shown.map(r => r[c]).filter(v => v !== '' && v != null); return !/Téléphone|N°|Réf|Taux|Date|Type/i.test(h) && vals.length > 0 && vals.filter(numLike).length / vals.length >= 0.8; });
+    for (let p = 0; p < pages; p++) {
+      const s = slide(mod + (pages > 1 ? `  (${p + 1}/${pages})` : ''), sub);
+      let y = 1.15; if (p === 0 && summary.length) { chips(s, summary, 1.1); y = 2.05; }
+      if (!shown.length) { s.addText('Aucune donnée sur cette période.', { x: 0.5, y: 3, w: 12.33, h: 1, align: 'center', fontSize: 18, color: MU }); continue; }
+      const data = [head.map((h, c) => ({ text: String(h), options: { bold: true, color: 'FFFFFF', fill: { color: DG }, fontSize: 9, align: right[c] ? 'right' : 'left', valign: 'middle' } }))];
+      shown.slice(p * ROWS, (p + 1) * ROWS).forEach((r, i) => data.push(head.map((h, c) => ({ text: txt(r[c], Math.max(4, Math.floor((w[c] - 0.15) * 11))), options: { fontSize: 10, color: TX, fill: { color: i % 2 ? LIGHT : 'FFFFFF' }, align: right[c] ? 'right' : 'left', valign: 'middle' } }))));
+      s.addTable(data, { x: 0.5, y, w: 12.33, colW: w, rowH: [0.5].concat(Array(data.length - 1).fill(0.4)), border: { type: 'solid', pt: 0.5, color: LINE } });
+      if (p === pages - 1 && rows.length > shown.length) s.addText(`… ${rows.length - shown.length} ligne(s) supplémentaire(s) non affichée(s) — utilisez l'export Excel pour la liste complète.`, { x: 0.5, y: 6.85, w: 12.33, h: 0.3, fontSize: 9, italic: true, color: MU });
+    }
+  };
+
+  /* page de titre + sommaire (rempli à la fin) */
+  const cover = P.addSlide(); n++; cover.background = { color: DG };
+  cover.addShape(P.ShapeType.rect, { x: 0.8, y: 2.2, w: 0.12, h: 2.2, fill: { color: GOLD }, line: { color: GOLD } });
+  cover.addText(S.settings.shop, { x: 1.2, y: 2.1, w: 11, h: 1.0, fontSize: 40, bold: true, color: 'FFFFFF', fit: 'shrink' });
+  cover.addText("Synthèse des données de l'application", { x: 1.2, y: 3.1, w: 11, h: 0.6, fontSize: 22, color: GOLD });
+  cover.addText(`Période : ${per}\nGénéré le ${fmtDate(Date.now())} par ${who()}\nTaux : 1 $ = ${S.settings.rate.toLocaleString('fr-FR')} FC · devise principale : ${mcur()}`, { x: 1.2, y: 3.8, w: 11, h: 1.2, fontSize: 14, color: 'CFE8E1', valign: 'top' });
+  const sommaire = slide('Sommaire');
+
+  /* synthèse */
+  const sy = buildReport('synth', from, to);
+  { toc.push(['Synthèse de la période', n + 1]); const s = slide('Synthèse de la période', per);
+    sy.rows.forEach(([k, v], i) => { const x = 0.56 + (i % 4) * 3.1, y = 1.3 + Math.floor(i / 4) * 1.45;
+      s.addShape(P.ShapeType.roundRect, { x, y, w: 2.9, h: 1.2, fill: { color: LIGHT }, line: { color: LINE, width: 0.75 }, rectRadius: 0.08 });
+      s.addShape(P.ShapeType.rect, { x, y: y + 0.15, w: 0.07, h: 0.9, fill: { color: GOLD }, line: { color: GOLD } });
+      s.addText([{ text: String(k), options: { fontSize: 11, color: MU, breakLine: true } }, { text: String(v), options: { fontSize: 18, bold: true, color: DG } }], { x: x + 0.2, y, w: 2.6, h: 1.2, valign: 'middle', fit: 'shrink' }); }); }
+
+  let count = 0;
+  /* Stocks */
+  if (can('products')) { const r = buildReport('stock', from, to), ord = { Rupture: 0, Faible: 1, OK: 2 }; r.rows.sort((a, b) => (ord[a[a.length - 1]] ?? 3) - (ord[b[b.length - 1]] ?? 3));
+    tableSlides('Stocks', snap, r.head, r.rows, [['Produits', S.products.length], ...r.summary, ['Stock faible', S.products.filter(p => p.qty > 0 && p.qty <= p.min).length]]); count++; }
+  /* Entrées de stock */
+  if (can('purchases')) { const r = buildReport('purchases', from, to); tableSlides('Entrées de stock', 'Période : ' + per, r.head, r.rows, [['Entrées', r.rows.length], ...r.summary]); count++; }
+  /* Ventes */
+  if (can('sales')) { const r = buildReport('sales', from, to); tableSlides('Ventes', 'Période : ' + per, r.head, r.rows, r.summary); count++; }
+  /* Clients & fournisseurs */
+  if (can('partners')) {
+    const cl = [...S.clients].sort((a, b) => (b.debt || 0) - (a.debt || 0) || a.name.localeCompare(b.name));
+    tableSlides('Clients', snap, ['Client', 'Téléphone', 'Achats' + C, 'Plafond de crédit' + C, 'Dette' + C], cl.map(c => [c.name, c.phone || '', mv(c.spent || 0), mv(c.limit || 0), mv(c.debt || 0)]),
+      [['Clients', cl.length], ['Clients endettés', cl.filter(c => (c.debt || 0) > 0.004).length], ['Total dû par les clients', usd(sum(cl, c => c.debt || 0))]]);
+    const su = [...S.suppliers].sort((a, b) => (b.debt || 0) - (a.debt || 0) || a.name.localeCompare(b.name));
+    tableSlides('Fournisseurs', snap, ['Fournisseur', 'Téléphone', 'Achats' + C, 'Dette' + C, 'Note /100', 'Délai (jours)', 'Conditions de paiement'], su.map(x => [x.name, x.phone || '', mv(x.bought || 0), mv(x.debt || 0), supplierScore(x) ?? '', x.delay ?? '', x.terms || '']),
+      [['Fournisseurs', su.length], ['Fournisseurs à payer', su.filter(x => (x.debt || 0) > 0.004).length], ['Total dû aux fournisseurs', usd(sum(su, x => x.debt || 0))]]);
+    const dr = buildReport('debts', from, to); tableSlides('Dettes & crédits', snap, dr.head, dr.rows, dr.summary);
+    const pays = S.cashops.filter(o => ['debt_client', 'debt_supplier'].includes(o.kind) && inR(o.ts)).sort((a, b) => a.ts - b.ts);
+    tableSlides('Règlements & reçus', 'Période : ' + per, ['Réf. reçu', 'Date', 'Type', 'Tiers', 'Montant', 'Mode', 'Solde avant' + C, 'Solde après' + C, 'Opérateur'],
+      pays.map(o => { const r = o.rcpt; return [r?.no || '—', fmtDate(o.ts), o.kind === 'debt_client' ? 'Client' : 'Fournisseur', r?.party || String(o.desc || '').replace(/^(Remboursement|Paiement) /, ''), money(Math.abs(o.amt), o.cur), ACC[o.cur]?.[0] || o.cur, r ? mvAt(r.before, r.rate) : '', r ? mvAt(r.after, r.rate) : '', o.user || '']; }),
+      [['Règlements', pays.length], ['Encaissé des clients', usd(sum(pays.filter(o => o.kind === 'debt_client'), o => toUSD(Math.abs(o.amt), o.cur)))], ['Payé aux fournisseurs', usd(sum(pays.filter(o => o.kind === 'debt_supplier'), o => toUSD(Math.abs(o.amt), o.cur)))]]);
+    count += 4;
+  }
+  /* Dépenses */
+  if (can('expenses')) { const r = buildReport('expenses', from, to); tableSlides('Dépenses', 'Période : ' + per, r.head, r.rows, r.summary); count++; }
+  /* Caisse */
+  if (can('cash')) { const b = balances(), r = buildReport('cash', from, to);
+    tableSlides('Caisse — soldes', snap, ['Compte', 'Devise', 'Solde'], Object.keys(ACC).map(k => [ACC[k][0], nat(k), money(b[k] || 0, k)]), [['Solde total', usd(cashUSD())], ['Solde CDF (espèces)', cdf(b.CDF)], ['Solde USD (espèces)', usdx(b.USD)]]);
+    tableSlides('Caisse — opérations', 'Période : ' + per, r.head, r.rows, [['Opérations', r.rows.length]]); count += 2; }
+  /* Historique */
+  if (can('journal')) { const L = S.journal.filter(j => inR(j.ts)).sort((a, b) => b.ts - a.ts);
+    tableSlides('Historique', 'Période : ' + per, ['Date', 'Utilisateur', 'Type', 'Montant', 'Description'], L.map(j => { const sg = jsign(j); return [fmtDate(j.ts), j.user || '', j.type, j.amt == null ? '' : sg + (j.cur ? money(Math.abs(j.amt), j.cur) : j.amt), j.desc || '']; }), [['Opérations', L.length]]); count++; }
+
+  /* sommaire */
+  sommaire.addTable(toc.map(([name, no], i) => [{ text: String(i + 1).padStart(2, '0') + '   ' + name, options: { fontSize: 15, color: TX, bold: true, fill: { color: i % 2 ? 'FFFFFF' : LIGHT } } }, { text: 'diapositive ' + no, options: { fontSize: 12, color: MU, align: 'right', fill: { color: i % 2 ? 'FFFFFF' : LIGHT } } }]),
+    { x: 2.2, y: 1.3, w: 8.9, colW: [6.4, 2.5], rowH: 0.36, border: { type: 'none' } });
+  if (!count) toast("Aucun module accessible avec votre profil — seule la synthèse est exportée", 'err');
+  toast('Génération du PowerPoint…');
+  P.writeFile({ fileName: `KAJIMINYI_Synthese_${iso(from)}_${iso(to)}.pptx` }).then(() => toast('PowerPoint exporté')).catch(e => toast('Erreur PowerPoint : ' + (e.message || e), 'err'));
+}
 
 /* ================= UTILISATEURS ================= */
 views.users = el => {
