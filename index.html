@@ -3516,9 +3516,15 @@ window.addEventListener('online', () => { netState(); toast('Connexion rétablie
 window.addEventListener('offline', () => { netState(); toast('Hors connexion — vos opérations seront synchronisées automatiquement', 'err'); });
 
 // Gestion de session : déconnexion après inactivité
+let lastAct = Date.now(), idleI = null;
 function resetIdle() {
-  clearTimeout(idleT); if (!S.me) return;
-  idleT = setTimeout(() => { toast('Session expirée (inactivité)', 'err'); F.signOut(F.auth); }, (S.settings.idle || 30) * 60000);
+  lastAct = Date.now(); if (idleI) return;
+  // vérification toutes les 20 s (un setTimeout dépasse sa limite de 24 jours et déconnectait aussitôt pour 43 200 min)
+  idleI = setInterval(() => {
+    if (!S.me) return;
+    const lim = Math.max(1, Math.min(Number(S.settings.idle) || 30, 525600)) * 60000;
+    if (Date.now() - lastAct > lim) { lastAct = Date.now(); toast('Session expirée (inactivité)', 'err'); F.signOut(F.auth); }
+  }, 20000);
 }
 ['click', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, resetIdle, { passive: true }));
 
