@@ -312,6 +312,12 @@ body:has(.sfoot) .mainwrap{padding-bottom:calc(var(--bnavh) + 96px)}
 body:has(.sfoot) .fab-bot{bottom:calc(var(--bnavh) + 80px)}
 .plist{padding-bottom:24px}
 @media(min-width:900px){.mainwrap{padding-bottom:28px}.sfoot{left:250px;bottom:0}body:has(.sfoot) .mainwrap{padding-bottom:96px}.fab-bot{bottom:20px}body:has(.sfoot) .fab-bot{bottom:84px}}
+
+/* ===== Défilement dans le contenu seulement : le document ne bouge jamais, donc les barres du bas restent immobiles ===== */
+html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+.shell{height:100vh;height:100dvh;min-height:0;overflow:hidden}
+.mainwrap{height:100vh;height:100dvh;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+@media print{html,body{position:static!important;height:auto!important;overflow:visible!important}.shell,.mainwrap{height:auto!important;overflow:visible!important}}
 /* bonus en produit */
 .bonusbox{background:#f4fbf7;border:1px dashed #00A86B;border-radius:14px;padding:10px 12px;margin:10px 0;display:flex;flex-direction:column;gap:6px}
 .bonusbox .cl{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.bonusbox select{flex:1;min-width:120px}
@@ -2182,6 +2188,7 @@ A.rper = d => { [rp.from, rp.to] = rangeFor(d.p); views.reports($('#view')); };
 A.rpdf = () => { const r = buildReport(rp.type, rp.from, rp.to); exportPDF(r.title, r.head, r.rows, r.summary); };
 A.rxls = () => { const r = buildReport(rp.type, rp.from, rp.to); exportXLSX(r.title, r.head, r.rows, r.summary); };
 A.rcsv = () => { const r = buildReport(rp.type, rp.from, rp.to); exportCSV(r.title, r.head, r.rows); };
+window.toTop = b => { const m = document.querySelector('.mainwrap'); if (m) m.scrollTo(0, b ? m.scrollHeight : 0); window.scrollTo(0, 0); };
 let pptxP;
 const loadPPTX = () => pptxP ??= new Promise((ok, ko) => {
   if (window.PptxGenJS) return ok();
@@ -2600,7 +2607,7 @@ A.csave = () => {
   const f = $('#cf'); if (!f || !cres) return; const inputs = {}; CALCS[ccur].f.forEach(([k]) => { inputs[k] = num(f[k].value); });
   const b = batch(), id = uid(); b.set('calcs', id, { id, ts: Date.now(), user: who(), uid: S.user.uid, type: ccur, inputs, result: cres.map(r => [r[0], r2(typeof r[1] === 'number' ? r[1] : 0), r[2] || '']), comment: f.comment.value }); b.commit(); toast('Calcul enregistré');
 };
-A.cuse = d => { const c = S.calcs.find(x => x.id === d.id); if (c) { ccur = c.type; cvals = c.inputs; views.calc($('#view')); window.scrollTo(0, 0); } };
+A.cuse = d => { const c = S.calcs.find(x => x.id === d.id); if (c) { ccur = c.type; cvals = c.inputs; views.calc($('#view')); toTop(); } };
 A.ccomm = d => { const c = S.calcs.find(x => x.id === d.id); if (!c) return; form('Commentaire du calcul', fld('Commentaire', 'comment', c.comment || ''), async v => { const b = batch(); b.upd('calcs', c.id, { comment: v.comment }); b.commit(); }); };
 A.cdel2 = async d => { const b = batch(); b.del('calcs', d.id); b.commit(); };
 A.cexp = () => exportCSV('Historique des calculs', ['Date', 'Utilisateur', 'Calcul', 'Valeurs', 'Résultat', 'Commentaire'], S.calcs.map(c => [fmtDate(c.ts), c.user, CALCS[c.type]?.t || c.type, Object.entries(c.inputs).map(([k, v]) => k + '=' + v).join(' ; '), c.result.map(r => r[0] + ' : ' + r[1]).join(' ; '), c.comment || '']));
@@ -2934,21 +2941,21 @@ A.acgrand = () => {
   if (!g) { const avg = Math.round(sum(cs, c => acNote(c).note) / cs.length * 10) / 10; g = { no: 'GB-' + dayKey().replace(/-/g, '') + '-' + uid().replace(/-/g, '').slice(0, 5).toUpperCase(), ts: Date.now(), note: avg, mention: mentionOf(avg), name: who() }; acSave({ grand: g }, `Grand brevet obtenu par ${who()} — moyenne ${fnum(avg, 1)}/20`); }
   showCert('grand', null, g);
 };
-A.acopen = d => { AC.v = 'course'; AC.c = d.id; views.academy($('#view')); window.scrollTo(0, 0); };
-A.acback = () => { AC.v = AC.v === 'chapter' || AC.v === 'exam' ? 'course' : 'home'; AC.done = false; AC.exam = null; AC.res = null; AC.ans = {}; views.academy($('#view')); window.scrollTo(0, 0); };
-A.acch = d => { AC.v = 'chapter'; AC.i = +d.i; AC.ans = {}; AC.done = false; views.academy($('#view')); window.scrollTo(0, 0); };
+A.acopen = d => { AC.v = 'course'; AC.c = d.id; views.academy($('#view')); toTop(); };
+A.acback = () => { AC.v = AC.v === 'chapter' || AC.v === 'exam' ? 'course' : 'home'; AC.done = false; AC.exam = null; AC.res = null; AC.ans = {}; views.academy($('#view')); toTop(); };
+A.acch = d => { AC.v = 'chapter'; AC.i = +d.i; AC.ans = {}; AC.done = false; views.academy($('#view')); toTop(); };
 A.acsubmit = () => {
   const c = acadCourses().find(x => x.id === AC.c), ch = c.chapters[AC.i];
   if (Object.keys(AC.ans).length < ch.quiz.length) return toast('Répondez à toutes les questions', 'err');
   const s = ch.quiz.filter((q, i) => AC.ans[i] === q.a).length, k = acKey(c.id, AC.i), prev = acBest(c.id, AC.i);
   acSave({ ch: { [k]: { s: Math.max(prev ?? 0, s), last: s, ts: Date.now() } } }); AC.done = s; views.academy($('#view'));
-  window.scrollTo(0, document.body.scrollHeight);
+  toTop(1);
 };
 A.acnext = () => { const c = acadCourses().find(x => x.id === AC.c); if (AC.i + 1 < c.chapters.length) A.acch({ i: AC.i + 1 }); else A.acback(); };
 A.acstart = () => {
   const c = acadCourses().find(x => x.id === AC.c); if (!acAllRead(c)) return toast('Terminez d’abord les exercices de tous les chapitres', 'err');
   AC.exam = shuffle(c.exam).map(q => { const idx = shuffle(q.o.map((_, i) => i)); return { q: q.q, o: idx.map(i => q.o[i]), a: idx.indexOf(q.a), e: q.e }; });
-  AC.v = 'exam'; AC.ans = {}; AC.res = null; views.academy($('#view')); window.scrollTo(0, 0);
+  AC.v = 'exam'; AC.ans = {}; AC.res = null; views.academy($('#view')); toTop();
 };
 A.acexam = async () => {
   const c = acadCourses().find(x => x.id === AC.c), n = AC.exam.length, un = n - Object.keys(AC.ans).length;
@@ -2960,7 +2967,7 @@ A.acexam = async () => {
     const rec = { no: 'BRV-' + c.id.slice(0, 4).toUpperCase() + '-' + dayKey().replace(/-/g, '').slice(2) + '-' + uid().replace(/-/g, '').slice(0, 4).toUpperCase(), ts: Date.now(), note: nt.note, mention: nt.mention, name: who() };
     acSave({ ex: { [c.id]: { brevet: rec } } }, `Brevet « ${c.title} » obtenu par ${who()} — ${fnum(nt.note, 1)}/20`); msg = 'brevet';
   } else if (nt.pass && prev.brevet) msg = 'deja';
-  AC.res = { s, n, msg }; views.academy($('#view')); window.scrollTo(0, 0);
+  AC.res = { s, n, msg }; views.academy($('#view')); toTop();
 };
 A.acteam = async () => {
   const w = modal('Résultats de l’équipe', '<p class="muted">Chargement…</p>', { wide: true });
@@ -3474,7 +3481,7 @@ function route() {
   if (!mods.includes(m)) m = mods[0]; cur = m; S.route = m; live.fn = null;
   const tt = $('#ttl'); if (tt) tt.innerHTML = m === 'dashboard' ? logo(28) + esc(S.settings.shop || 'KAJIMINYI') : esc(MODULES[m]);
   $$('[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === m));
-  $('#side')?.classList.remove('open'); draw(); window.scrollTo(0, 0);
+  $('#side')?.classList.remove('open'); draw(); toTop();
 }
 function draw() {
   const el = $('#view'); if (!el || !views[cur]) return;
