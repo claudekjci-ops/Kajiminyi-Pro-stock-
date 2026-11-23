@@ -667,18 +667,61 @@ const confirmBox = (msg, ok = 'Confirmer') => new Promise(res => {
 function batch() {
   const b = F.writeBatch(F.db);
   const api = {
-    set: (c, id, d) => { b.set(F.doc(F.db, c, id), d); return api; },
-    merge: (c, id, d) => { b.set(F.doc(F.db, c, id), d, { merge: true }); return api; },
-    upd: (c, id, d) => { b.update(F.doc(F.db, c, id), d); return api; },
+    set: (c, id, d) => { auditChg(api, c, id, d); b.set(F.doc(F.db, c, id), d); return api; },
+    merge: (c, id, d) => { auditChg(api, c, id, d); b.set(F.doc(F.db, c, id), d, { merge: true }); return api; },
+    upd: (c, id, d) => { auditChg(api, c, id, d); b.update(F.doc(F.db, c, id), d); return api; },
     del: (c, id) => { b.delete(F.doc(F.db, c, id)); return api; },
     commit: () => {
       const p = b.commit(); sound('ok');
+      S.pend = (S.pend || 0) + 1; window.__net?.(); p.then(() => {}, () => {}).then(() => { S.pend = Math.max(0, S.pend - 1); window.__net?.(); });
       p.catch(e => { console.error(e); logErr('Écriture refusée : ' + (e.code || e.message)); toast(e.code === 'permission-denied' ? "Action non autorisée pour votre profil" : 'Erreur de synchronisation : ' + e.message, 'err'); });
       return p;
     }
   };
   return api;
 }
+
+// ---------- Audit : qui a modifié quoi (ancienne et nouvelle valeur) ----------
+const AUD_LBL = { name: 'Nom', sell: 'Prix de vente', buy: "Prix d'achat", min: 'Stock minimum', phone: 'Téléphone', limit: 'Plafond de crédit', cat: 'Catégorie', unit: 'Unité', barcode: 'Code-barres', supplierId: 'Fournisseur', rate: 'Taux', address: 'Adresse', note: 'Note', shop: 'Nom du commerce', idle: 'Inactivité (min)', mainCur: 'Devise principale', maxDisc: 'Remise maximale (%)', footer: 'Pied de reçu' };
+const AUD_COL = { clients: 'Client', suppliers: 'Fournisseur' }; // les produits ont déjà leur propre journal détaillé
+const AUD_MONEY = ['sell', 'buy', 'limit'], AUD_SKIP = ['qty', 'debt', 'spent', 'bought', 'ts', 'id', 'updated', 'lastBak', 'lastBakBy', 'cgu', 'lastLogin', 'units', 'photo', 'img'];
+function auditChg(api, c, id, d) {
+  try {
+    let old, label;
+    if (c === 'meta' && id === 'settings') { old = S.settings; label = 'Paramètres'; }
+    else if (AUD_COL[c]) { old = (S[c] || []).find(x => x.id === id); if (!old) return; label = AUD_COL[c] + ' « ' + (d.name ?? old.name ?? id) + ' »'; }
+    else return;
+    if (!d || !old) return;
+    const chg = [];
+    for (const k in d) {
+      const n = d[k], o = old[k];
+      if (AUD_SKIP.includes(k) || /key|token|secret|pass/i.test(k) || n === undefined || (typeof n === 'object' && n !== null) || typeof n === 'function') continue;
+      if (String(o ?? '') === String(n ?? '')) continue;
+      const fmt = v => v === undefined || v === '' || v === null ? '(vide)' : AUD_MONEY.includes(k) && typeof v === 'number' ? usd(v) : String(v).slice(0, 80);
+      chg.push({ f: AUD_LBL[k] || k, o: fmt(o), n: fmt(n) });
+    }
+    if (!chg.length) return;
+    const jid = jr(api, 'Modification', label + ' — ' + chg.map(x => `${x.f} : ${x.o} → ${x.n}`).join(' ; ').slice(0, 480), null, '', '', id);
+    api.merge('journal', jid, { chg });
+  } catch (e) { console.warn('audit', e); }
+}
+// ---------- Verrouillage de la journée après clôture de caisse ----------
+const lockTs = () => Math.max(0, ...S.sessions.filter(s => s.status === 'closed' && s.closeTs).map(s => s.closeTs));
+const isLocked = ts => ts && ts <= lockTs();
+// ---------- Signalement automatique des erreurs ----------
+const ERR_SEEN = new Set();
+function reportErr(msg, stack) {
+  try {
+    msg = String(msg || '').slice(0, 300);
+    if (!msg || /ResizeObserver|Script error|Non-Error promise|Load failed|NetworkError|AbortError/i.test(msg) || ERR_SEEN.has(msg) || ERR_SEEN.size >= 12 || !S.user || !S.me) return;
+    ERR_SEEN.add(msg); logErr(msg);
+    const id = uid(), b = F.writeBatch(F.db);
+    b.set(F.doc(F.db, 'errors', id), { id, ts: Date.now(), day: dayKey(), user: who(), email: S.user.email, route: S.route || '', msg, stack: String(stack || '').slice(0, 600), ua: navigator.userAgent.slice(0, 160), v: 'v7' });
+    b.commit().catch(() => {});
+  } catch { /* */ }
+}
+window.addEventListener('error', e => reportErr(e.message, e.error?.stack));
+window.addEventListener('unhandledrejection', e => reportErr(e.reason?.message || e.reason, e.reason?.stack));
 // Suppression définitive de collections entières (administrateur). Lit le serveur, puis supprime par paquets de 400.
 async function purgeCols(cols, onProgress) {
   let n = 0;
@@ -1024,7 +1067,7 @@ const paidUSD = p => p.usd + p.cdf / S.settings.rate + p.mm + p.mmc / S.settings
 
 views.sales = el => {
   if (!ck) ck = freshCk();
-  const tabs = `<div class="chips"><button class="chip ${stab === 'new' ? 'on' : ''}" data-act="stab" data-t="new">Nouvelle vente</button><button class="chip ${stab === 'hist' ? 'on' : ''}" data-act="stab" data-t="hist">Historique des ventes</button></div>`;
+  const tabs = `<div class="chips"><button class="chip ${stab === 'new' ? 'on' : ''}" data-act="sltab" data-t="new">Nouvelle vente</button><button class="chip ${stab === 'hist' ? 'on' : ''}" data-act="sltab" data-t="hist">Historique des ventes</button></div>`;
   if (stab === 'hist') {
     const rows = [...S.sales].sort((a, b) => b.ts - a.ts).slice(0, 150);
     el.innerHTML = page('Ventes', '', tabs + `<label class="sbox">${ic('search', 18)}<input data-filter="#shist" placeholder="Rechercher (n°, client, vendeur)…"></label><div id="shist" class="llist">
@@ -1060,7 +1103,7 @@ document.addEventListener('keydown', e => {
   if (vis.length === 1) { sq = ''; A.addcart({ id: vis[0].dataset.id }); return; }
   if (!vis.length && looksLikeCode(q)) addByCode(q);
 });
-A.stab = d => { stab = d.t; views.sales($('#view')); };
+A.sltab = d => { stab = d.t; views.sales($('#view')); };
 A.scat = d => { scat = d.c; $$('[data-act="scat"]').forEach(b => b.classList.toggle('on', b.dataset.c === scat)); applyGrid(); };
 A.addcart = d => {
   const p = S.products.find(x => x.id === d.id); if (!p) return;
@@ -1229,7 +1272,13 @@ A.rshare = async d => {
   try { if (navigator.share) await navigator.share({ title: 'Reçu ' + s.no, text }); else window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank'); }
   catch { /* annulé */ }
 };
-A.cancelsale = async d => {
+A.cancelsale = d => {
+  const s = S.sales.find(x => x.id === d.id); if (!s || s.status === 'cancelled') return;
+  if (!isLocked(s.ts)) return A.cancelsale0(d);
+  if (S.me?.role !== 'admin') return toast('🔒 Journée clôturée le ' + fmtDate(lockTs()) + ' : cette vente est verrouillée. Seul l\'administrateur peut la modifier, avec une justification.', 'err');
+  form('🔒 Vente d\'une journée clôturée', `<div class="hint">La vente ${esc(s.no)} appartient à une journée dont la caisse est clôturée. Une justification est obligatoire ; elle sera enregistrée dans l'Historique.</div>${fld('Justification', 'why', '', 'text', 'required minlength="8"')}`, v => { setTimeout(() => A.cancelsale0(d, v.why.trim()), 50); });
+};
+A.cancelsale0 = async (d, why = '') => {
   const s = S.sales.find(x => x.id === d.id); if (!s || s.status === 'cancelled') return;
   if (!await confirmBox(`Annuler la vente ${s.no} (${fmAt(s.total, s.rate)}) ? Le stock et la caisse seront rétablis.`, 'Annuler la vente')) return;
   const b = batch(), need = {};
@@ -1240,7 +1289,7 @@ A.cancelsale = async d => {
   const p = s.pay || {};
   [['usd', 'USD'], ['cdf', 'CDF'], ['mm', 'MM'], ['mmc', 'MMC'], ['bank', 'BANK']].forEach(([k, acc]) => { if (p[k] > 0) cashop(b, 'cancel', acc, -p[k], 'Annulation ' + s.no, s.id); });
   if (s.clientId && S.clients.some(c => c.id === s.clientId)) b.upd('clients', s.clientId, { debt: inc(-(p.credit || 0)), spent: inc(-s.total) });
-  jr(b, 'Annulation', `Annulation de la vente ${s.no} par ${who()}`, s.total, 'USD', '', s.id);
+  jr(b, 'Annulation', `Annulation de la vente ${s.no} par ${who()}` + (why ? ` [journée verrouillée — justification : ${why}]` : ''), s.total, 'USD', '', s.id);
   b.commit(); toast('Vente annulée');
   askJustif('sale', s.id, `Annulation de la vente ${s.no} (${fmAt(s.total, s.rate)})`);
 };
@@ -1763,8 +1812,8 @@ views.cash = el => {
   const ses = curSession(), bal = balances(), today = dayKey();
   const ops = S.cashops.filter(o => o.day === today).sort((a, b) => b.ts - a.ts);
   el.innerHTML = page('Caisse', ses
-    ? `<button class="btn ghost" data-act="cop">Autre opération</button><button class="btn red" data-act="cclose">Clôturer</button>`
-    : `<button class="btn" data-act="copen">Ouvrir la caisse</button>`, `
+    ? `<button class="btn ghost" data-act="ecarts">Écarts</button><button class="btn ghost" data-act="cop">Autre opération</button><button class="btn red" data-act="cclose">Clôturer</button>`
+    : `<button class="btn ghost" data-act="ecarts">Écarts</button><button class="btn" data-act="copen">Ouvrir la caisse</button>`, `
     <div class="card"><div class="row sp"><b>État</b><span class="badge ${ses ? '' : 'bad'}">${ses ? 'Ouverte depuis ' + fmtDate(ses.openTs) + ' par ' + esc(ses.openUser) : 'Fermée'}</span></div></div>
     <div class="hero"><small>Solde total de la caisse</small><b class="${cashUSD() < 0 ? 'neg' : ''}">${usd(cashUSD())}</b><span>Principal : ${cdf(bal.CDF)} · Dollars : ${usdx(bal.USD)}</span><i>${ic('wallet', 38)}</i></div>
     <div class="grid g4" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">${Object.keys(ACC).map(k => `<div class="kpi ${nat(k) === 'CDF' ? 'o' : 'd'}"><small>${ACC[k][0]}</small><b class="${bal[k] < 0 ? 'neg' : ''}">${money(bal[k], k)}</b></div>`).join('')}</div>
@@ -3317,7 +3366,8 @@ views.settings = el => {
       <div class="row wrap"><button type="button" class="btn sm" data-act="aisave">Enregistrer</button><button type="button" class="btn ghost sm" data-act="aitest">Tester la connexion</button>${key ? '<button type="button" class="btn ghost sm" data-act="aidel">Effacer la clé</button>' : ''}</div>
       <small class="muted">Modèle utilisé : ${esc((() => { try { return localStorage.getItem('ksp_ai_model') || 'pas encore déterminé'; } catch { return '—'; } })())}</small></div></div>`;
   }
-  if (tab === 'bak' && adm) body = `<div class="card"><h3>Sauvegarde complète</h3><p class="muted sm">Télécharge toutes les données (produits, ventes, caisse, journal…) en un fichier JSON. Faites-le régulièrement et conservez-le en lieu sûr. Les pièces jointes sont incluses.</p><button class="btn" data-act="backup">${ic('dl', 16)} Télécharger la sauvegarde</button></div>
+  if (tab === 'bak' && adm) body = `<div class="card"><h3>Sauvegarde complète</h3><p class="muted sm">Télécharge toutes les données (produits, ventes, caisse, journal…) en un fichier JSON. Faites-le régulièrement et conservez-le en lieu sûr. Les pièces jointes sont incluses.</p><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn" data-act="backup">${ic('dl', 16)} Télécharger</button><button class="btn ghost" data-act="backup" data-mode="share">☁️ Envoyer vers Drive</button><button class="btn ghost" data-act="restore">♻️ Restaurer</button></div><p class="muted sm">Dernière sauvegarde : <b>${s.lastBak ? fmtDate(s.lastBak) + ' (' + esc(s.lastBakBy || '') + ')' : 'jamais'}</b>. Un rappel s'affiche chaque semaine.</p></div>
+    <div class="card"><h3>Erreurs de l'application</h3><p class="muted sm">Les erreurs rencontrées par vos employés sont signalées automatiquement ici.</p><button class="btn ghost" data-act="errlist">Voir les erreurs signalées</button></div>
     <div class="card purge"><h3>Effacer les données de test</h3><p class="muted sm">Supprime <b>définitivement</b> les éléments cochés (sur tous les appareils). Votre compte administrateur, les utilisateurs et les paramètres sont conservés. <b>Les quantités en stock ne sont pas modifiées</b> : si vous effacez les ventes sans les produits, remettez les stocks à jour.</p>
       <div id="pgl">${PURGE.map(([k, t, on]) => `<label class="chk"><input type="checkbox" data-pg="${k}" ${on ? 'checked' : ''}> ${t}</label>`).join('')}</div>
       <label>Pour confirmer, tapez <b>EFFACER</b><input id="pgc" class="in" autocomplete="off" placeholder="EFFACER"></label>
@@ -3368,13 +3418,72 @@ async function saveForm(v) {
   else if (tab === 'mod') patch = { off: Object.keys(MODULES).filter(k => !PERMANENT.includes(k) && !v['m_' + k]) };
   save(patch, label); toast('Paramètres enregistrés');
 }
-A.backup = async () => {
+A.backup = async d => {
   toast('Préparation de la sauvegarde…');
   const out = { app: 'KAJIMINYI STOCK PRO', version: 2, ts: Date.now(), by: who(), settings: S.settings };
   COLS.forEach(c => { out[c] = S[c]; });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(out)], { type: 'application/json' })); a.download = 'kajiminyi-sauvegarde-' + dayKey() + '.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-  const b = batch(); jr(b, 'Sauvegarde', 'Sauvegarde téléchargée par ' + who()); b.commit();
+  const name = 'kajiminyi-sauvegarde-' + dayKey() + '.json', blob = new Blob([JSON.stringify(out)], { type: 'application/json' });
+  let shared = false;
+  if (d?.mode === 'share') {
+    try { const f = new File([blob], name, { type: 'application/json' }); if (navigator.canShare?.({ files: [f] })) { await navigator.share({ files: [f], title: 'Sauvegarde KAJIMINYI STOCK PRO' }); shared = true; } else toast("Partage de fichier indisponible ici : téléchargement à la place", 'err'); }
+    catch (e) { if (e.name === 'AbortError') return; }
+  }
+  if (!shared) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
+  const b = batch(); jr(b, 'Sauvegarde', (shared ? 'Sauvegarde partagée (Drive/autre) par ' : 'Sauvegarde téléchargée par ') + who()); b.merge('meta', 'settings', { lastBak: Date.now(), lastBakBy: who() }); b.commit();
+  try { localStorage.setItem('ksp_lastbak', String(Date.now())); } catch { /* */ }
+  $('.modal-wrap.bakdue')?.remove();
 };
+// Rappel de sauvegarde hebdomadaire (administrateur)
+window.__bakCheck = () => {
+  if (S.me?.role !== 'admin' || !S.products.length && !S.sales.length) return;
+  let last = Number(S.settings.lastBak || 0); try { last = Math.max(last, Number(localStorage.getItem('ksp_lastbak') || 0)); } catch { /* */ }
+  const snooze = (() => { try { return localStorage.getItem('ksp_bakSnooze'); } catch { return ''; } })();
+  if (Date.now() - last < 7 * 864e5 || snooze === dayKey()) return;
+  const w = modal('💾 Sauvegarde hebdomadaire', `<p>${last ? 'Dernière sauvegarde : <b>' + fmtDate(last) + '</b>.' : '<b>Aucune sauvegarde enregistrée.</b>'} Faites une copie de vos données cette semaine.</p>
+    <div class="col" style="gap:8px"><button class="btn" data-act="backup" data-mode="share">☁️ Envoyer vers Google Drive / partager</button><button class="btn ghost" data-act="backup">⬇️ Télécharger le fichier</button><button class="btn ghost" id="bsnz">Plus tard (aujourd'hui)</button></div>`);
+  w.classList.add('bakdue'); w.querySelector('#bsnz').onclick = () => { try { localStorage.setItem('ksp_bakSnooze', dayKey()); } catch { /* */ } w.close(); };
+};
+A.restore = () => {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json';
+  inp.onchange = async () => {
+    const f = inp.files[0]; if (!f) return; let data;
+    try { data = JSON.parse(await f.text()); } catch { return toast('Fichier illisible : ce n\'est pas une sauvegarde valide', 'err'); }
+    if (data.app !== 'KAJIMINYI STOCK PRO') return toast('Ce fichier n\'est pas une sauvegarde de KAJIMINYI STOCK PRO', 'err');
+    const cols = COLS.filter(c => c !== 'users' && Array.isArray(data[c]) && data[c].length), total = cols.reduce((n, c) => n + data[c].length, 0);
+    form('Restaurer une sauvegarde', `<div class="hint">Sauvegarde du <b>${fmtDate(data.ts)}</b> par ${esc(data.by || '?')} : <b>${total}</b> éléments (${cols.map(c => c + ' ' + data[c].length).join(', ')}).<br>Les données du fichier sont <b>ajoutées ou remises à leur ancien état</b> ; rien n'est supprimé. L'historique et la caisse déjà enregistrés ne sont pas touchés. Les utilisateurs ne sont pas modifiés.</div>${fld('Tapez RESTAURER pour confirmer', 'ok', '', 'text', 'required autocomplete="off"')}`, async v => {
+      if (v.ok.trim().toUpperCase() !== 'RESTAURER') throw new Error('Tapez exactement RESTAURER');
+      let n = 0; toast('Restauration en cours…');
+      for (const c of cols) {
+        const locked = ['cashops', 'journal'].includes(c), have = new Set((S[c] || []).map(x => x.id));
+        const rows = data[c].filter(x => x?.id && !(locked && have.has(x.id)));
+        for (let i = 0; i < rows.length; i += 400) {
+          const b = F.writeBatch(F.db);
+          rows.slice(i, i + 400).forEach(x => { const { id, ...rest } = x; b.set(F.doc(F.db, c, id), rest, { merge: true }); }); await b.commit(); n += Math.min(400, rows.length - i);
+        }
+      }
+      if (data.settings) { const { lastBak, lastBakBy, ...st } = data.settings; await F.writeBatch(F.db).set(F.doc(F.db, 'meta', 'settings'), st, { merge: true }).commit(); }
+      const b = batch(); jr(b, 'Restauration', `Sauvegarde du ${fmtDate(data.ts)} restaurée par ${who()} (${n} éléments)`); b.commit(); toast(n + ' éléments restaurés');
+    }, { ok: 'Restaurer' });
+  };
+  inp.click();
+};
+A.ecarts = () => {
+  const L = S.sessions.filter(s => s.status === 'closed').sort((a, b) => b.closeTs - a.closeTs).slice(0, 60);
+  const tc = L.reduce((n, s) => n + (s.diff?.CDF || 0), 0), tu = L.reduce((n, s) => n + (s.diff?.USD || 0), 0), cl = v => `<b class="${v < 0 ? 'neg' : v > 0 ? 'pos' : ''}">${v > 0 ? '+' : ''}${v}</b>`;
+  modal('Écarts de caisse', `<p class="muted sm">Chaque clôture compare l'argent théorique à l'argent compté. Un écart négatif = manque.</p>
+    <div class="totbox">Cumul — CDF : ${cl(Math.round(tc))} FC · USD : ${cl(r00(tu))} $</div>
+    ${L.length ? `<div class="llist">${L.map(s => `<div class="lrow"><div class="gr"><b>${fmtDate(s.closeTs)}</b><small>Ouverte par ${esc(s.openUser || '?')} · Clôturée par <b>${esc(s.closeUser || '?')}</b></small><small>Théorique ${cdf(s.theo?.CDF || 0)} / ${usdx(s.theo?.USD || 0)} — compté ${cdf(s.phys?.CDF || 0)} / ${usdx(s.phys?.USD || 0)}</small></div><div class="r">CDF ${cl(s.diff?.CDF || 0)}<br>USD ${cl(s.diff?.USD || 0)}</div></div>`).join('')}</div>` : '<p class="muted">Aucune clôture pour le moment.</p>'}`);
+};
+A.errlist = async () => {
+  const w = modal('Erreurs signalées', '<p class="muted">Chargement…</p>');
+  try {
+    const snap = await F.getDocs(F.collection(F.db, 'errors')), L = snap.docs.map(d => d.data()).sort((a, b) => b.ts - a.ts).slice(0, 40);
+    w.querySelector('.mb, .modal-b, .sheet-b')?.remove;
+    const html = L.length ? `<div class="llist">${L.map(e => `<div class="lrow"><div class="gr"><b>${esc(e.msg)}</b><small>${fmtDate(e.ts)} · ${esc(e.user)} · ${esc(e.route || '')} · ${esc(e.v || '')}</small><small>${esc((e.ua || '').slice(0, 90))}</small></div></div>`).join('')}</div><button class="btn red sm" data-act="errclear">Vider la liste</button>` : '<p class="muted">Aucune erreur signalée. 👍</p>';
+    w.close(); modal('Erreurs signalées', html);
+  } catch (e) { w.close(); toast('Lecture impossible : ' + (e.code || e.message), 'err'); }
+};
+A.errclear = async () => { try { const snap = await F.getDocs(F.collection(F.db, 'errors')); for (let i = 0; i < snap.docs.length; i += 400) { const b = F.writeBatch(F.db); snap.docs.slice(i, i + 400).forEach(d => b.delete(d.ref)); await b.commit(); } toast('Liste vidée'); } catch (e) { toast('Refusé : ' + (e.code || e.message), 'err'); } };
 const pres = t => { const e = $('#permres'); if (e) e.textContent = t; };
 A.permnotif = async () => { try { pres('Notifications : ' + await Notification.requestPermission()); } catch { pres('Non disponible sur cet appareil'); } };
 A.permcam = async () => { try { const st = await navigator.mediaDevices.getUserMedia({ video: true }); st.getTracks().forEach(t => t.stop()); pres('Appareil photo : autorisé'); } catch (e) { pres('Appareil photo : ' + (e.name === 'NotAllowedError' ? 'refusé' : 'indisponible')); } };
@@ -3473,6 +3582,7 @@ function startApp() {
   document.body.classList.toggle('ro', readOnly()); applyTheme();
   { const nb = $('.bnav'); if (nb) { const setH = () => { if (nb.offsetHeight) document.documentElement.style.setProperty('--bnavh', nb.offsetHeight + 'px'); }; setH(); try { new ResizeObserver(setH).observe(nb); } catch { window.addEventListener('resize', setH); } } }
   netState(); route();
+  setTimeout(() => window.__bakCheck?.(), 9000);
   unsub = subscribe(refresh); setTimeout(() => { if (S.me && S.me.cgu?.version !== S.settings.cguVersion) A.cguGate(); }, 2500); badge();
   resetIdle();
 }
@@ -3511,7 +3621,8 @@ document.addEventListener('click', e => {
   const a = e.target.closest('[data-act]'); if (!a) return;
   const fn = A[a.dataset.act]; if (fn) { e.preventDefault(); fn(a.dataset, a, e); }
 });
-const netState = () => { const n = $('#net'); if (!n) return; const on = navigator.onLine; n.textContent = on ? '● En ligne' : '● Hors ligne'; n.classList.toggle('off', !on); if (on && !netState.first) { } };
+const netState = () => { const n = $('#net'); if (!n) return; const on = navigator.onLine, p = S.pend || 0; n.textContent = (on ? '● En ligne' : '● Hors ligne') + (p ? ' · ⏳ ' + p + ' en attente' : ''); n.classList.toggle('off', !on); n.title = p ? p + ' opération(s) pas encore synchronisée(s) avec le serveur' : ''; };
+window.__net = netState;
 window.addEventListener('online', () => { netState(); toast('Connexion rétablie — synchronisation en cours'); });
 window.addEventListener('offline', () => { netState(); toast('Hors connexion — vos opérations seront synchronisées automatiquement', 'err'); });
 
