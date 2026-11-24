@@ -1081,22 +1081,168 @@ function alertsList() {
 }
 
 /* ---------- exports ---------- */
-function exportPDF(title, head, rows, summary = []) {
+/* ================= EXPORTS PROFESSIONNELS (graphiques + mise en forme) ================= */
+const XPAL = ['0A8A5A', 'F4C542', '2E86AB', 'E4572E', '8E6BBF', '17B890', 'F28F3B', '6B8480', '003B32', 'B5C7C3'];
+const cnum = v => { if (typeof v === 'number') return isFinite(v) ? v : null; if (typeof v !== 'string') return null; const t = v.replace(/[  \s]/g, '').replace(/(FC|CDF|USD|\$|%)/g, '').replace(',', '.'); return /^-?\d+(\.\d+)?$/.test(t) ? parseFloat(t) : null; };
+function chartSpecs(type, head, rows) {
+  const out = []; if (!rows || !rows.length) return out;
+  const grp = (ki, vi, o = {}) => { const m = new Map(); rows.forEach(r => { const k = String(o.key ? o.key(r[ki]) : (r[ki] ?? '—')).trim() || '—', v = o.count ? 1 : cnum(r[vi]); if (v == null) return; m.set(k, (m.get(k) || 0) + v); }); let e = [...m.entries()]; if (!o.keep) e.sort((a, b) => b[1] - a[1]); return e.slice(o.keep ? -(o.top || 31) : 0, o.keep ? undefined : (o.top || 10)); };
+  const add = (title, kind, e, name) => { if (e.length && e.some(x => Math.abs(x[1]) > 1e-9) && !(kind === 'pie' && e.every(x => x[1] <= 0))) out.push({ title, kind, cats: e.map(x => x[0]), series: [{ name, vals: e.map(x => Math.round(x[1] * 100) / 100) }] }); };
+  const T = type, mcurS = ' (' + (typeof mcur === 'function' ? mcur() : '') + ')';
+  if (T === 'sales') { add('Ventes par jour' + mcurS, 'bar', grp(1, 5, { key: s => String(s).slice(0, 5), keep: 1, top: 20 }), 'Ventes'); add('Paiements par mode', 'pie', grp(6, 5, { count: 1, top: 6 }), 'Nombre'); }
+  else if (T === 'profit') { const cats = rows.slice(-31).map(r => String(r[0]).slice(-5)); out.push({ title: "Chiffre d'affaires et bénéfice net" + mcurS, kind: 'line', cats, series: [{ name: "Chiffre d'affaires", vals: rows.slice(-31).map(r => cnum(r[1]) || 0) }, { name: 'Bénéfice net', vals: rows.slice(-31).map(r => cnum(r[5]) || 0) }] }); }
+  else if (T === 'top') add('Bénéfice par produit (top 10)' + mcurS, 'bar', grp(0, 3), 'Bénéfice');
+  else if (T === 'expenses') { add('Dépenses par catégorie' + mcurS, 'pie', grp(2, 5, { top: 8 }), 'Dépenses'); add('Principaux motifs' + mcurS, 'bar', grp(1, 5, { top: 8 }), 'Montant'); }
+  else if (T === 'stock') { add('État du stock', 'pie', grp(rows[0].length - 1, 0, { count: 1, top: 5 }), 'Produits'); add('Valeur du stock par produit' + mcurS, 'bar', grp(0, 5), 'Valeur'); }
+  else if (T === 'purchases') add('Achats par fournisseur' + mcurS, 'bar', grp(1, 4, { top: 8 }), 'Achats');
+  else if (T === 'debts') { add('Dettes les plus élevées' + mcurS, 'bar', grp(1, 3), 'Reste à payer'); add('Clients / fournisseurs', 'pie', grp(0, 3, { top: 3 }), 'Montant'); }
+  else if (T === 'staff') add("Chiffre d'affaires par employé" + mcurS, 'bar', grp(0, 2, { top: 10 }), 'CA');
+  else if (T === 'synth' || T === 'health') { /* indicateurs texte */ }
+  else { const nc = head.findIndex((h, c) => c > 0 || true ? rows.filter(r => cnum(r[c]) != null && typeof r[c] === 'number').length / rows.length >= 0.8 : false); const lc = head.findIndex((h, c) => rows.filter(r => cnum(r[c]) == null).length / rows.length >= 0.8); if (nc >= 0 && lc >= 0 && nc !== lc && rows.length >= 2) add(head[nc] + ' — top 10', 'bar', grp(lc, nc), head[nc]); }
+  return out;
+}
+function drawChart(sp, W = 900, H = 440) {
+  const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d'); if (!g) return null;
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, H); g.strokeStyle = '#E1E9E7'; g.lineWidth = 2; g.strokeRect(1, 1, W - 2, H - 2);
+  g.fillStyle = '#003B32'; g.fillRect(0, 0, 8, H); g.font = 'bold 22px Arial'; g.textBaseline = 'top'; g.fillText(sp.title, 24, 14);
+  const fmt = v => { const a = Math.abs(v); return a >= 1e6 ? (v / 1e6).toFixed(1) + ' M' : a >= 1e4 ? Math.round(v / 1e3) + ' k' : String(Math.round(v * 100) / 100); }, cat = i => { const s = String(sp.cats[i]); return s.length > 13 ? s.slice(0, 12) + '…' : s; }, col = i => '#' + XPAL[i % XPAL.length];
+  if (sp.kind === 'pie') {
+    const v = sp.series[0].vals.map(x => Math.max(0, x)), tot = sum(v, x => x) || 1, cx = W * 0.3, cy = H / 2 + 22, R = Math.min(H * 0.36, W * 0.24); let a = -Math.PI / 2;
+    v.forEach((x, i) => { const b = a + x / tot * Math.PI * 2; g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, R, a, b); g.closePath(); g.fillStyle = col(i); g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 2; g.stroke(); a = b; });
+    g.font = '17px Arial'; v.forEach((x, i) => { const y = 70 + i * 34; g.fillStyle = col(i); g.fillRect(W * 0.58, y, 18, 18); g.fillStyle = '#13302B'; g.fillText(cat(i) + ' — ' + Math.round(x / tot * 100) + ' %', W * 0.58 + 28, y); });
+  } else {
+    const x0 = 86, x1 = W - 24, y0 = sp.series.length > 1 ? 78 : 62, y1 = H - 64, all = sp.series.flatMap(s => s.vals), mx = Math.max(0, ...all), mn = Math.min(0, ...all), rng = (mx - mn) || 1, Y = v => y1 - (v - mn) / rng * (y1 - y0), n = sp.cats.length, bw = (x1 - x0) / n;
+    g.font = '14px Arial'; g.textBaseline = 'middle'; g.textAlign = 'right';
+    for (let k = 0; k <= 4; k++) { const v = mn + rng * k / 4, y = Y(v); g.strokeStyle = '#E1E9E7'; g.lineWidth = 1; g.beginPath(); g.moveTo(x0, y); g.lineTo(x1, y); g.stroke(); g.fillStyle = '#6B8480'; g.fillText(fmt(v), x0 - 8, y); }
+    g.textAlign = 'center'; g.textBaseline = 'top'; const skip = Math.ceil(n / 12);
+    sp.cats.forEach((_, i) => { if (i % skip) return; g.save(); g.translate(x0 + bw * (i + .5), y1 + 8); if (n > 6) g.rotate(-0.5); g.textAlign = n > 6 ? 'right' : 'center'; g.fillStyle = '#13302B'; g.fillText(cat(i), 0, 0); g.restore(); });
+    if (sp.kind === 'line') sp.series.forEach((s, j) => { g.strokeStyle = col(j === 0 ? 0 : 3); g.lineWidth = 3; g.beginPath(); s.vals.forEach((v, i) => { const x = x0 + bw * (i + .5), y = Y(v); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke(); g.fillStyle = col(j === 0 ? 0 : 3); s.vals.forEach((v, i) => { g.beginPath(); g.arc(x0 + bw * (i + .5), Y(v), 4, 0, 7); g.fill(); }); });
+    else { const m = sp.series.length, w = bw * 0.7 / m; sp.series.forEach((s, j) => s.vals.forEach((v, i) => { const x = x0 + bw * i + bw * 0.15 + w * j; g.fillStyle = col(j); g.fillRect(x, Math.min(Y(v), Y(0)), w, Math.abs(Y(v) - Y(0))); if (n <= 12) { g.fillStyle = '#13302B'; g.font = '13px Arial'; g.textAlign = 'center'; g.textBaseline = 'bottom'; g.fillText(fmt(v), x + w / 2, Math.min(Y(v), Y(0)) - 3); } })); }
+    if (sp.series.length > 1) { g.textAlign = 'left'; g.textBaseline = 'middle'; g.font = '15px Arial'; sp.series.forEach((s, j) => { const x = 24 + j * 230; g.fillStyle = col(j === 0 ? 0 : 3); g.fillRect(x, 52, 16, 16); g.fillStyle = '#13302B'; g.fillText(s.name, x + 24, 60); }); }
+  }
+  try { return c.toDataURL('image/png'); } catch { return null; }
+}
+const xnumCol = (head, rows) => head.map((h, c) => { if (/Téléphone|N°|Réf|Taux|Date|Heure|ID|Rang/i.test(h)) return false; const v = rows.map(r => r[c]).filter(x => x !== '' && x != null); return v.length > 0 && v.filter(x => typeof x === 'number').length / v.length >= 0.8; });
+window.__xp = { chartSpecs: (...a) => chartSpecs(...a), drawChart: (...a) => drawChart(...a) };
+function exportPDF(title, head, rows, summary = [], opt = {}) {
   const J = window.jspdf?.jsPDF;
   if (!J) return toast('Export PDF indisponible (bibliothèque non chargée — connectez-vous à Internet une fois)', 'err');
-  const d = new J({ orientation: head.length > 6 ? 'landscape' : 'portrait' });
-  d.setFontSize(14); d.text(S.settings.shop + ' - ' + title, 14, 16);
-  d.setFontSize(9); d.text('Généré le ' + fmtDate(Date.now()) + ' par ' + who(), 14, 22);
-  let y = 28; summary.forEach(([k, v]) => { d.text(k + ' : ' + v, 14, y); y += 5; });
-  d.autoTable({ head: [head], body: rows, startY: y + 2, styles: { fontSize: 8 }, headStyles: { fillColor: [0, 59, 50] } });
+  const d = new J({ orientation: head.length > 6 ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' }), pw = d.internal.pageSize.getWidth(), ph = d.internal.pageSize.getHeight();
+  d.setFillColor(0, 59, 50); d.rect(0, 0, pw, 26, 'F'); d.setFillColor(244, 197, 66); d.rect(0, 0, 4, 26, 'F');
+  d.setTextColor(255, 255, 255); d.setFontSize(16); d.setFont(undefined, 'bold'); d.text(String(S.settings.shop || ''), 12, 11); d.setFontSize(11); d.setFont(undefined, 'normal'); d.text(String(title), 12, 18);
+  d.setFontSize(8); d.setTextColor(207, 232, 225); d.text('Généré le ' + fmtDate(Date.now()) + ' par ' + who(), 12, 23.5);
+  let y = 33; d.setTextColor(19, 48, 43);
+  if (summary.length) { const per = pw > 250 ? 5 : 3, bw = (pw - 24 - (per - 1) * 3) / per, bh = 15;
+    summary.forEach(([k, v], i) => { const x = 12 + (i % per) * (bw + 3), yy = y + Math.floor(i / per) * (bh + 3); d.setFillColor(244, 247, 246); d.setDrawColor(225, 233, 231); d.roundedRect(x, yy, bw, bh, 2, 2, 'FD'); d.setFillColor(244, 197, 66); d.rect(x, yy + 2, 1.2, bh - 4, 'F'); d.setFontSize(7.5); d.setTextColor(107, 132, 128); d.text(String(k).slice(0, 38), x + 4, yy + 5.5); d.setFontSize(10.5); d.setFont(undefined, 'bold'); d.setTextColor(0, 59, 50); d.text(String(v).slice(0, 30), x + 4, yy + 11.5); d.setFont(undefined, 'normal'); });
+    y += Math.ceil(summary.length / per) * (bh + 3) + 2; }
+  let specs = []; try { specs = chartSpecs(opt.type || null, head, rows).slice(0, 2); } catch { /* sans graphique */ }
+  const imgs = specs.map(drawChart).filter(Boolean);
+  if (imgs.length) { const gap = 4, w = imgs.length === 1 ? Math.min(pw - 24, 150) : (pw - 24 - gap) / 2, h = w * 440 / 900; if (y + h > ph - 20) { d.addPage(); y = 14; } imgs.forEach((im, i) => d.addImage(im, 'PNG', imgs.length === 1 ? (pw - w) / 2 : 12 + i * (w + gap), y, w, h)); y += h + 6; }
+  const nm = xnumCol(head, rows), cs = {}; nm.forEach((b, c) => { if (b) cs[c] = { halign: 'right' }; });
+  d.autoTable({ head: [head], body: rows, startY: y, margin: { left: 12, right: 12, bottom: 16 }, styles: { fontSize: 8, cellPadding: 2, textColor: [19, 48, 43], lineColor: [225, 233, 231], lineWidth: 0.1 }, headStyles: { fillColor: [0, 59, 50], textColor: 255, fontStyle: 'bold' }, alternateRowStyles: { fillColor: [244, 247, 246] }, columnStyles: cs });
+  const N = d.getNumberOfPages(); for (let i = 1; i <= N; i++) { d.setPage(i); d.setDrawColor(244, 197, 66); d.setLineWidth(0.5); d.line(12, ph - 11, pw - 12, ph - 11); d.setFontSize(8); d.setTextColor(107, 132, 128); d.text(String(S.settings.shop || '') + ' — ' + title, 12, ph - 7); d.text('Page ' + i + ' / ' + N, pw - 12, ph - 7, { align: 'right' }); }
   d.save(title.replace(/\W+/g, '_') + '.pdf');
 }
-function exportXLSX(title, head, rows, summary = []) {
+let jszP;
+const loadJSZip = () => jszP ??= new Promise((ok, ko) => {
+  if (window.JSZip) return ok(); const urls = ['https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js', 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js']; let i = 0;
+  const next = () => { if (i >= urls.length) { jszP = null; return ko(new Error('jszip')); } const sc = document.createElement('script'); sc.src = urls[i++]; sc.onload = () => window.JSZip ? ok() : (sc.remove(), next()); sc.onerror = () => { sc.remove(); next(); }; document.head.appendChild(sc); }; next();
+});
+const xe = s => String(s ?? '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const xcol = n => { let s = ''; for (n++; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + (n - 1) % 26) + s; return s; };
+function xlsxSheet() {
+  const cells = {}, merges = [], rowH = {}; let maxR = 0, maxC = 0;
+  return { cells, merges, rowH, set(r, c, v, s = 0) { cells[r + ',' + c] = [v, s]; maxR = Math.max(maxR, r); maxC = Math.max(maxC, c); }, dim: () => [maxR, maxC],
+    xml(o = {}) {
+      const rows = {}; Object.entries(cells).forEach(([k, [v, s]]) => { const [r, c] = k.split(',').map(Number); (rows[r] ??= []).push([c, v, s]); });
+      const sd = Object.keys(rows).map(Number).sort((a, b) => a - b).map(r => `<row r="${r + 1}"${rowH[r] ? ` ht="${rowH[r]}" customHeight="1"` : ''}>${rows[r].sort((a, b) => a[0] - b[0]).map(([c, v, s]) => { const ref = xcol(c) + (r + 1); if (v === '' || v == null) return `<c r="${ref}" s="${s}"/>`; return typeof v === 'number' && isFinite(v) ? `<c r="${ref}" s="${s}"><v>${v}</v></c>` : `<c r="${ref}" s="${s}" t="inlineStr"><is><t xml:space="preserve">${xe(v)}</t></is></c>`; }).join('')}</row>`).join('');
+      const cols = o.widths ? `<cols>${o.widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('')}</cols>` : '';
+      const pane = o.freeze ? `<pane ySplit="${o.freeze}" topLeftCell="A${o.freeze + 1}" activePane="bottomLeft" state="frozen"/>` : '';
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetPr>${o.tab ? `<tabColor rgb="FF${o.tab}"/>` : ''}<pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:${xcol(maxC)}${maxR + 1}"/><sheetViews><sheetView workbookViewId="0" showGridLines="0"${o.sel ? ' tabSelected="1"' : ''}>${pane}</sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/>${cols}<sheetData>${sd}</sheetData>${o.filter ? `<autoFilter ref="${o.filter}"/>` : ''}${merges.length ? `<mergeCells count="${merges.length}">${merges.map(m => `<mergeCell ref="${m}"/>`).join('')}</mergeCells>` : ''}<pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/><pageSetup orientation="${o.land ? 'landscape' : 'portrait'}" fitToWidth="1" fitToHeight="0"/>${o.drawing ? '<drawing r:id="rId1"/>' : ''}</worksheet>`;
+    } };
+}
+const XSTY = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="164" formatCode="#,##0.00"/><numFmt numFmtId="165" formatCode="#,##0"/></numFmts>
+<fonts count="7"><font><sz val="11"/><color rgb="FF13302B"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><b/><sz val="18"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FF003B32"/><name val="Calibri"/></font><font><i/><sz val="9"/><color rgb="FF6B8480"/><name val="Calibri"/></font><font><b/><sz val="13"/><color rgb="FF003B32"/><name val="Calibri"/></font><font><sz val="10"/><color rgb="FFCFE8E1"/><name val="Calibri"/></font></fonts>
+<fills count="6"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF003B32"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF4F7F6"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF4C542"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE8F3EF"/></patternFill></fill></fills>
+<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFE1E9E7"/></left><right style="thin"><color rgb="FFE1E9E7"/></right><top style="thin"><color rgb="FFE1E9E7"/></top><bottom style="thin"><color rgb="FFE1E9E7"/></bottom><diagonal/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="15"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+<xf numFmtId="0" fontId="2" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"><alignment vertical="center" indent="1"/></xf>
+<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="0" fillId="3" borderId="1" xfId="0" applyFill="1" applyBorder="1"><alignment vertical="center"/></xf>
+<xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="165" fontId="0" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFill="1" applyBorder="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="164" fontId="0" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFill="1" applyBorder="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="0" fontId="3" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"><alignment vertical="center" indent="1"/></xf>
+<xf numFmtId="0" fontId="5" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="0" fontId="6" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"><alignment vertical="center" indent="1"/></xf>
+<xf numFmtId="0" fontId="0" fillId="4" borderId="0" xfId="0" applyFill="1"/>
+<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs></styleSheet>`;
+function xchart(sp, i, sheet, r0, n) {
+  const NS = 'xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"', q = `'${sheet}'`, catRef = `${q}!$A$${r0 + 2}:$A$${r0 + 1 + n}`;
+  const strC = L => `<c:strCache><c:ptCount val="${L.length}"/>${L.map((v, k) => `<c:pt idx="${k}"><c:v>${xe(v)}</c:v></c:pt>`).join('')}</c:strCache>`, sp1 = c => `<c:spPr><a:solidFill><a:srgbClr val="${c}"/></a:solidFill></c:spPr>`;
+  const ser = sp.series.map((s, j) => { const L = xcol(j + 1), color = XPAL[sp.kind === 'line' && j ? 3 : j % XPAL.length], tx = `<c:tx><c:strRef><c:f>${q}!$${L}$${r0 + 1}</c:f>${strC([s.name])}</c:strRef></c:tx>`, cat = `<c:cat><c:strRef><c:f>${catRef}</c:f>${strC(sp.cats)}</c:strRef></c:cat>`, val = `<c:val><c:numRef><c:f>${q}!$${L}$${r0 + 2}:$${L}$${r0 + 1 + n}</c:f><c:numCache><c:formatCode>General</c:formatCode><c:ptCount val="${n}"/>${s.vals.map((v, k) => `<c:pt idx="${k}"><c:v>${v}</c:v></c:pt>`).join('')}</c:numCache></c:numRef></c:val>`;
+    if (sp.kind === 'pie') return `<c:ser><c:idx val="0"/><c:order val="0"/>${tx}${sp.cats.map((_, k) => `<c:dPt><c:idx val="${k}"/><c:bubble3D val="0"/>${sp1(XPAL[k % XPAL.length])}</c:dPt>`).join('')}<c:dLbls><c:numFmt formatCode="0%" sourceLinked="0"/><c:spPr><a:noFill/></c:spPr><c:showLegendKey val="0"/><c:showVal val="0"/><c:showCatName val="0"/><c:showSerName val="0"/><c:showPercent val="1"/><c:showBubbleSize val="0"/><c:showLeaderLines val="1"/></c:dLbls>${cat}${val}</c:ser>`;
+    if (sp.kind === 'line') return `<c:ser><c:idx val="${j}"/><c:order val="${j}"/>${tx}<c:spPr><a:ln w="31750" cap="rnd"><a:solidFill><a:srgbClr val="${color}"/></a:solidFill></a:ln></c:spPr><c:marker><c:symbol val="circle"/><c:size val="6"/>${sp1(color)}</c:marker>${cat}${val}<c:smooth val="0"/></c:ser>`;
+    return `<c:ser><c:idx val="${j}"/><c:order val="${j}"/>${tx}${sp1(color)}<c:invertIfNegative val="0"/>${cat}${val}</c:ser>`; }).join('');
+  const ax = `<c:catAx><c:axId val="111"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:numFmt formatCode="General" sourceLinked="0"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="low"/><c:crossAx val="222"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:noMultiLvlLbl val="0"/></c:catAx><c:valAx><c:axId val="222"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:majorGridlines><c:spPr><a:ln w="6350"><a:solidFill><a:srgbClr val="E1E9E7"/></a:solidFill></a:ln></c:spPr></c:majorGridlines><c:numFmt formatCode="#,##0" sourceLinked="0"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="111"/><c:crosses val="autoZero"/><c:crossBetween val="between"/></c:valAx>`;
+  const body = sp.kind === 'pie' ? `<c:pieChart><c:varyColors val="1"/>${ser}<c:firstSliceAng val="0"/></c:pieChart>` : sp.kind === 'line' ? `<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>${ser}<c:marker val="1"/><c:axId val="111"/><c:axId val="222"/></c:lineChart>${ax}` : `<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>${ser}<c:gapWidth val="60"/><c:axId val="111"/><c:axId val="222"/></c:barChart>${ax}`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><c:chartSpace ${NS}><c:roundedCorners val="0"/><c:chart><c:title><c:tx><c:rich><a:bodyPr/><a:p><a:pPr><a:defRPr sz="1300" b="1"><a:solidFill><a:srgbClr val="003B32"/></a:solidFill></a:defRPr></a:pPr><a:r><a:rPr lang="fr-FR" sz="1300" b="1"><a:solidFill><a:srgbClr val="003B32"/></a:solidFill></a:rPr><a:t>${xe(sp.title)}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title><c:autoTitleDeleted val="0"/><c:plotArea><c:layout/>${body}</c:plotArea>${sp.kind === 'pie' || sp.series.length > 1 ? '<c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend>' : ''}<c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart><c:spPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:ln w="9525"><a:solidFill><a:srgbClr val="E1E9E7"/></a:solidFill></a:ln></c:spPr></c:chartSpace>`;
+}
+async function buildXlsxBlob({ title, head, rows, summary = [], specs = [] }) {
+  const Z = new window.JSZip(), shop = S.settings.shop || '', nm = xnumCol(head, rows), C = head.length;
+  /* feuille Données */
+  const D = xlsxSheet(), lastC = Math.max(C - 1, 5);
+  D.set(0, 0, shop + ' — ' + title, 1); for (let c = 1; c <= lastC; c++) D.set(0, c, '', 1); D.merges.push(`A1:${xcol(lastC)}1`); D.rowH[0] = 34;
+  D.set(1, 0, 'Généré le ' + fmtDate(Date.now()) + ' par ' + who(), 11); for (let c = 1; c <= lastC; c++) D.set(1, c, '', 11); D.merges.push(`A2:${xcol(lastC)}2`); D.rowH[1] = 18;
+  for (let c = 0; c <= lastC; c++) D.set(2, c, '', 12); D.rowH[2] = 4;
+  let r = 3; summary.forEach(([k, v]) => { D.set(r, 0, k, 9); D.set(r, 1, '', 9); D.merges.push(`A${r + 1}:B${r + 1}`); D.set(r, 2, v, 10); D.set(r, 3, '', 10); D.merges.push(`C${r + 1}:D${r + 1}`); r++; });
+  if (summary.length) r++;
+  const hr = r; head.forEach((h, c) => D.set(hr, c, h, 2)); D.rowH[hr] = 30;
+  const isInt = head.map((_, c) => rows.every(x => typeof x[c] !== 'number' || Number.isInteger(x[c])));
+  rows.forEach((row, i) => head.forEach((_, c) => { const v = row[c], z = i % 2, num = nm[c] && typeof v === 'number'; D.set(hr + 1 + i, c, num ? v : (v ?? ''), num ? (isInt[c] ? 5 : 7) + z : 3 + z); }));
+  const widths = head.map((h, c) => Math.min(45, Math.max(10, String(h).length + 3, ...rows.slice(0, 200).map(x => String(x[c] ?? '').length + 2))));
+  const sheets = [{ name: 'Données', xml: D.xml({ widths, freeze: hr + 1, filter: rows.length ? `A${hr + 1}:${xcol(C - 1)}${hr + 1 + rows.length}` : '', land: C > 6, tab: 'F4C542', sel: !specs.length }) }];
+  /* feuille Graphiques */
+  const charts = [], drawAnchors = []; let gs = null;
+  if (specs.length) {
+    const G = xlsxSheet(); G.set(0, 0, shop + ' — ' + title, 1); for (let c = 1; c < 16; c++) G.set(0, c, '', 1); G.merges.push('A1:P1'); G.rowH[0] = 34;
+    G.set(1, 0, 'Tableau de bord — généré le ' + fmtDate(Date.now()) + ' par ' + who(), 11); for (let c = 1; c < 16; c++) G.set(1, c, '', 11); G.merges.push('A2:P2'); G.rowH[1] = 18;
+    let gr = 3; summary.forEach(([k, v]) => { G.set(gr, 0, k, 9); G.set(gr, 1, '', 9); G.set(gr, 2, '', 9); G.merges.push(`A${gr + 1}:C${gr + 1}`); G.set(gr, 3, v, 10); G.set(gr, 4, '', 10); G.set(gr, 5, '', 10); G.merges.push(`D${gr + 1}:F${gr + 1}`); gr++; });
+    const top = gr + 1, nrows = Math.ceil(specs.length / 2); let dr = top + nrows * 21 + 1; G.set(dr - 1, 0, 'Données des graphiques', 13);
+    specs.forEach((sp, i) => { const n = sp.cats.length, r0 = dr; G.set(r0, 0, sp.title, 2); sp.series.forEach((s, j) => G.set(r0, j + 1, s.name, 2)); sp.cats.forEach((cname, k) => { G.set(r0 + 1 + k, 0, cname, 3 + (k % 2)); sp.series.forEach((s, j) => G.set(r0 + 1 + k, j + 1, s.vals[k], 7 + (k % 2))); }); dr += n + 3;
+      charts.push(xchart(sp, i, 'Synthèse', r0, n)); drawAnchors.push([(i % 2) * 8, top + Math.floor(i / 2) * 21, (i % 2) * 8 + 8, top + Math.floor(i / 2) * 21 + 20]); });
+    gs = { name: 'Synthèse', xml: G.xml({ widths: [30, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14], drawing: true, land: true, tab: '0A8A5A', sel: true }) }; sheets.unshift(gs);
+  }
+  const ns = sheets.length;
+  Z.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}${charts.length ? '<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>' : ''}${charts.map((_, i) => `<Override PartName="/xl/charts/chart${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`).join('')}</Types>`);
+  Z.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
+  Z.file('xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView activeTab="0"/></bookViews><sheets>${sheets.map((s, i) => `<sheet name="${xe(s.name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>`);
+  Z.file('xl/_rels/workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}<Relationship Id="rId${ns + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
+  Z.file('xl/styles.xml', XSTY); sheets.forEach((s, i) => Z.file(`xl/worksheets/sheet${i + 1}.xml`, s.xml));
+  if (charts.length) {
+    Z.file('xl/worksheets/_rels/sheet1.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>');
+    Z.file('xl/drawings/_rels/drawing1.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${charts.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart${i + 1}.xml"/>`).join('')}</Relationships>`);
+    Z.file('xl/drawings/drawing1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">${drawAnchors.map((a, i) => `<xdr:twoCellAnchor><xdr:from><xdr:col>${a[0]}</xdr:col><xdr:colOff>60000</xdr:colOff><xdr:row>${a[1]}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>${a[2]}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${a[3]}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="${i + 2}" name="Graphique ${i + 1}"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId${i + 1}"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor>`).join('')}</xdr:wsDr>`);
+    charts.forEach((x, i) => Z.file(`xl/charts/chart${i + 1}.xml`, x));
+  }
+  return Z.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', compression: 'DEFLATE' });
+}
+function exportXLSXPlain(title, head, rows, summary = []) {
   if (!window.XLSX) return toast('Export Excel indisponible (bibliothèque non chargée — connectez-vous à Internet une fois)', 'err');
   const ws = XLSX.utils.aoa_to_sheet([[S.settings.shop + ' - ' + title], ...summary, [], head, ...rows]);
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Rapport');
-  XLSX.writeFile(wb, title.replace(/\W+/g, '_') + '.xlsx');
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Rapport'); XLSX.writeFile(wb, title.replace(/\W+/g, '_') + '.xlsx');
 }
+async function exportXLSX(title, head, rows, summary = [], opt = {}) {
+  try { if (!window.JSZip) { toast('Préparation du fichier Excel…'); await loadJSZip(); } } catch { return exportXLSXPlain(title, head, rows, summary); }
+  let specs = []; try { specs = chartSpecs(opt.type || null, head, rows); } catch { /* */ }
+  try { const blob = await buildXlsxBlob({ title, head, rows, summary, specs }), a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = title.replace(/\W+/g, '_') + '.xlsx'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); toast('Excel exporté' + (specs.length ? ' avec ' + specs.length + ' graphique(s)' : '')); }
+  catch (e) { reportErr?.(e); exportXLSXPlain(title, head, rows, summary); }
+}
+
 function exportCSV(title, head, rows) {
   const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
   const csv = '﻿' + [head, ...rows].map(r => r.map(q).join(';')).join('\n');
@@ -2539,8 +2685,8 @@ document.addEventListener('change', e => {
   views.reports($('#view'));
 });
 A.rper = d => { [rp.from, rp.to] = rangeFor(d.p); views.reports($('#view')); };
-A.rpdf = () => { const r = buildReport(rp.type, rp.from, rp.to); exportPDF(r.title, r.head, r.rows, r.summary); };
-A.rxls = () => { const r = buildReport(rp.type, rp.from, rp.to); exportXLSX(r.title, r.head, r.rows, r.summary); };
+A.rpdf = () => { const r = buildReport(rp.type, rp.from, rp.to); exportPDF(r.title, r.head, r.rows, r.summary, { type: rp.type }); };
+A.rxls = () => { const r = buildReport(rp.type, rp.from, rp.to); exportXLSX(r.title, r.head, r.rows, r.summary, { type: rp.type }); };
 A.rcsv = () => { const r = buildReport(rp.type, rp.from, rp.to); exportCSV(r.title, r.head, r.rows); };
 window.toTop = b => { const m = document.querySelector('.mainwrap'); if (m) m.scrollTo(0, b ? m.scrollHeight : 0); window.scrollTo(0, 0); };
 let pptxP;
@@ -2593,8 +2739,16 @@ function exportPPTX() {
     });
   };
   const ROWS = 11, MAXR = 220, toc = [];
-  const tableSlides = (mod, sub, head, rows, summary = []) => {
-    toc.push([mod, n + 1]);
+  const chartSlides = (mod, specs, sub = '') => {
+    if (!specs.length) return;
+    for (let g = 0; g < specs.length; g += 2) { const gp = specs.slice(g, g + 2), s = slide(mod + ' — graphiques', sub), w = gp.length === 1 ? 12.33 : 6.05;
+      gp.forEach((sp, i) => { const opt = { x: 0.5 + i * (w + 0.23), y: 1.2, w, h: 5.7, showTitle: true, title: sp.title, titleFontSize: 14, titleColor: DG, titleBold: true, showLegend: sp.kind === 'pie' || sp.series.length > 1, legendPos: 'b', legendFontSize: 11, chartColors: sp.kind === 'pie' ? XPAL.slice(0, sp.cats.length) : XPAL.slice(0, sp.series.length > 1 ? sp.series.length : 1), catAxisLabelFontSize: 10, valAxisLabelFontSize: 10, valGridLine: { color: LINE, size: 0.5 }, catGridLine: { style: 'none' }, showValue: sp.kind === 'bar' && sp.cats.length <= 12, dataLabelFontSize: 10, dataLabelFormatCode: '#,##0', valAxisLabelFormatCode: '#,##0', dataLabelColor: '13302B' }, data = sp.series.map(se => ({ name: se.name, labels: sp.cats, values: se.vals }));
+        if (sp.kind === 'pie') s.addChart(P.charts.PIE, data, { ...opt, showPercent: true, showValue: false, dataLabelFormatCode: '0%', dataLabelColor: 'FFFFFF', showLegend: true, legendPos: 'r' });
+        else if (sp.kind === 'line') s.addChart(P.charts.LINE, data, { ...opt, lineSize: 3, lineDataSymbolSize: 7, chartColors: [XPAL[0], XPAL[3]] });
+        else s.addChart(P.charts.BAR, data, { ...opt, barDir: 'col', barGapWidthPct: 60 }); }); }
+  };
+  const tableSlides = (mod, sub, head, rows, summary = [], type = null) => {
+    toc.push([mod, n + 1]); try { chartSlides(mod, chartSpecs(type, head, rows), sub); } catch (e) { reportErr?.(e); }
     const shown = rows.slice(0, MAXR), pages = Math.max(1, Math.ceil(shown.length / ROWS)), w = colW(head, shown);
     const right = head.map((h, c) => { const vals = shown.map(r => r[c]).filter(v => v !== '' && v != null); return !/Téléphone|N°|Réf|Taux|Date|Type/i.test(h) && vals.length > 0 && vals.filter(numLike).length / vals.length >= 0.8; });
     for (let p = 0; p < pages; p++) {
@@ -2624,14 +2778,16 @@ function exportPPTX() {
       s.addShape(P.ShapeType.rect, { x, y: y + 0.15, w: 0.07, h: 0.9, fill: { color: GOLD }, line: { color: GOLD } });
       s.addText([{ text: String(k), options: { fontSize: 11, color: MU, breakLine: true } }, { text: String(v), options: { fontSize: 18, bold: true, color: DG } }], { x: x + 0.2, y, w: 2.6, h: 1.2, valign: 'middle', fit: 'shrink' }); }); }
 
+  if (can('sales')) { const pf = buildReport('profit', from, to), tp = buildReport('top', from, to);
+    toc.push(['Évolution & rentabilité', n + 1]); try { chartSlides('Évolution & rentabilité', [...chartSpecs('profit', pf.head, pf.rows), ...chartSpecs('top', tp.head, tp.rows)], 'Période : ' + per); } catch (e) { reportErr?.(e); } }
   let count = 0;
   /* Stocks */
   if (can('products')) { const r = buildReport('stock', from, to), ord = { Rupture: 0, Faible: 1, OK: 2 }; r.rows.sort((a, b) => (ord[a[a.length - 1]] ?? 3) - (ord[b[b.length - 1]] ?? 3));
-    tableSlides('Stocks', snap, r.head, r.rows, [['Produits', S.products.length], ...r.summary, ['Stock faible', S.products.filter(p => p.qty > 0 && p.qty <= p.min).length]]); count++; }
+    tableSlides('Stocks', snap, r.head, r.rows, [['Produits', S.products.length], ...r.summary, ['Stock faible', S.products.filter(p => p.qty > 0 && p.qty <= p.min).length]], 'stock'); count++; }
   /* Entrées de stock */
-  if (can('purchases')) { const r = buildReport('purchases', from, to); tableSlides('Entrées de stock', 'Période : ' + per, r.head, r.rows, [['Entrées', r.rows.length], ...r.summary]); count++; }
+  if (can('purchases')) { const r = buildReport('purchases', from, to); tableSlides('Entrées de stock', 'Période : ' + per, r.head, r.rows, [['Entrées', r.rows.length], ...r.summary], 'purchases'); count++; }
   /* Ventes */
-  if (can('sales')) { const r = buildReport('sales', from, to); tableSlides('Ventes', 'Période : ' + per, r.head, r.rows, r.summary); count++; }
+  if (can('sales')) { const r = buildReport('sales', from, to); tableSlides('Ventes', 'Période : ' + per, r.head, r.rows, r.summary, 'sales'); count++; }
   /* Clients & fournisseurs */
   if (can('partners')) {
     const cl = [...S.clients].sort((a, b) => (b.debt || 0) - (a.debt || 0) || a.name.localeCompare(b.name));
@@ -2640,7 +2796,7 @@ function exportPPTX() {
     const su = [...S.suppliers].sort((a, b) => (b.debt || 0) - (a.debt || 0) || a.name.localeCompare(b.name));
     tableSlides('Fournisseurs', snap, ['Fournisseur', 'Téléphone', 'Achats' + C, 'Dette' + C, 'Note /100', 'Délai (jours)', 'Conditions de paiement'], su.map(x => [x.name, x.phone || '', mv(x.bought || 0), mv(x.debt || 0), supplierScore(x) ?? '', x.delay ?? '', x.terms || '']),
       [['Fournisseurs', su.length], ['Fournisseurs à payer', su.filter(x => (x.debt || 0) > 0.004).length], ['Total dû aux fournisseurs', usd(sum(su, x => x.debt || 0))]]);
-    const dr = buildReport('debts', from, to); tableSlides('Dettes & crédits', snap, dr.head, dr.rows, dr.summary);
+    const dr = buildReport('debts', from, to); tableSlides('Dettes & crédits', snap, dr.head, dr.rows, dr.summary, 'debts');
     const pays = S.cashops.filter(o => ['debt_client', 'debt_supplier'].includes(o.kind) && inR(o.ts)).sort((a, b) => a.ts - b.ts);
     tableSlides('Règlements & reçus', 'Période : ' + per, ['Réf. reçu', 'Date', 'Type', 'Tiers', 'Montant', 'Mode', 'Solde avant' + C, 'Solde après' + C, 'Opérateur'],
       pays.map(o => { const r = o.rcpt; return [r?.no || '—', fmtDate(o.ts), o.kind === 'debt_client' ? 'Client' : 'Fournisseur', r?.party || String(o.desc || '').replace(/^(Remboursement|Paiement) /, ''), money(Math.abs(o.amt), o.cur), ACC[o.cur]?.[0] || o.cur, r ? mvAt(r.before, r.rate) : '', r ? mvAt(r.after, r.rate) : '', o.user || '']; }),
@@ -2648,7 +2804,7 @@ function exportPPTX() {
     count += 4;
   }
   /* Dépenses */
-  if (can('expenses')) { const r = buildReport('expenses', from, to); tableSlides('Dépenses', 'Période : ' + per, r.head, r.rows, r.summary); count++; }
+  if (can('expenses')) { const r = buildReport('expenses', from, to); tableSlides('Dépenses', 'Période : ' + per, r.head, r.rows, r.summary, 'expenses'); count++; }
   /* Caisse */
   if (can('cash')) { const b = balances(), r = buildReport('cash', from, to);
     tableSlides('Caisse — soldes', snap, ['Compte', 'Devise', 'Solde'], Object.keys(ACC).map(k => [ACC[k][0], nat(k), money(b[k] || 0, k)]), [['Solde total', usd(cashUSD())], ['Solde CDF (espèces)', cdf(b.CDF)], ['Solde USD (espèces)', usdx(b.USD)]]);
