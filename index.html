@@ -975,6 +975,35 @@ A.lblprint = () => {
 </style><div class="g">${L.map(p => `<div class="l"><div class="n">${esc(p.name)}</div><div class="p">${usd(p.sell)}</div>${barSvg(p.barcode)}</div>`).join('')}</div>`);
 };
 
+/* ================= ALERTES TELEGRAM ================= */
+const tgOn = () => { const s = S.settings; return !!(s.tgToken && s.tgChat && s.tgOff !== true); };
+const tgEv = k => (S.settings.tgEv ? S.settings.tgEv[k] !== false : true);
+async function tgPost(text, token = S.settings.tgToken, chat = S.settings.tgChat) {
+  const r = await fetch('https://api.telegram.org/bot' + token + '/sendMessage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: String(chat).trim(), text: String(text).slice(0, 3900) }) });
+  const j = await r.json().catch(() => ({})); if (!r.ok || !j.ok) throw new Error(j.description || ('Telegram ' + r.status)); return j;
+}
+const tgQ = () => { try { return JSON.parse(localStorage.getItem('ksp_tgq') || '[]'); } catch { return []; } };
+const tgQset = q => { try { localStorage.setItem('ksp_tgq', JSON.stringify(q.slice(-30))); } catch { /* */ } };
+async function tgFlush() { if (!tgOn() || !navigator.onLine) return; let q = tgQ(); if (!q.length) return; const left = []; for (const m of q) { if (Date.now() - m.t > 864e5) continue; try { await tgPost(m.x); } catch { left.push(m); } } tgQset(left); }
+function tgNotify(kind, text) {
+  try { if (!tgOn() || !tgEv(kind)) return; const full = `🏪 ${S.settings.shop || 'KAJIMINYI'}\n${text}\n👤 ${who()} · ${fmtDate(Date.now())}`;
+    tgPost(full).catch(() => { const q = tgQ(); q.push({ t: Date.now(), x: full }); tgQset(q); }); } catch { /* jamais bloquant */ }
+}
+window.addEventListener('online', () => setTimeout(tgFlush, 1500)); setTimeout(tgFlush, 12000);
+function tgSale(s, need) {
+  if (!tgOn()) return;
+  const big = num(S.settings.tgBig) || 100; if (s.total >= big && tgEv('sale')) tgNotify('sale', `💰 Grosse vente ${s.no} : ${fmAt(s.total, s.rate)}${s.clientName ? '\nClient : ' + s.clientName : ''}`);
+  for (const pid in need) { const p = S.products.find(x => x.id === pid); if (!p) continue; const left = r2((p.qty || 0) - need[pid]);
+    if (left <= 0) tgNotify('stock', `🚨 RUPTURE : ${p.name} (stock 0)`); else if (p.min > 0 && left <= p.min && (p.qty || 0) > p.min) tgNotify('stock', `⚠️ Stock faible : ${p.name} — reste ${left} ${p.unit} (minimum ${p.min})`); }
+}
+A.tgtest = async () => { const t = $('#tgtok')?.value.trim() || S.settings.tgToken, c = $('#tgchat')?.value.trim() || S.settings.tgChat; if (!t || !c) return toast('Renseignez le jeton et le numéro de discussion', 'err');
+  try { await tgPost(`✅ Test réussi — les alertes de ${S.settings.shop || 'votre boutique'} arriveront ici.`, t, c); toast('Message de test envoyé : regardez Telegram'); } catch (e) { toast('Échec : ' + (e.message || e) + ' (avez-vous appuyé sur Démarrer dans le bot ?)', 'err'); } };
+document.addEventListener('submit', e => {
+  if (e.target.id !== 'tgf') return; e.preventDefault(); if (S.me?.role !== 'admin') return;
+  const v = Object.fromEntries(new FormData(e.target)), ev = {}; ['sale', 'stock', 'cancel', 'ret', 'ecart'].forEach(k => { ev[k] = !!v['ev_' + k]; });
+  const b = batch(); b.merge('meta', 'settings', { tgToken: v.tgToken.trim(), tgChat: v.tgChat.trim(), tgBig: num(v.tgBig) || 100, tgEv: ev, tgOff: !v.tgOn }); jr(b, 'Paramètres', 'Alertes Telegram ' + (v.tgOn ? 'activées' : 'désactivées') + ' (par ' + who() + ')'); b.commit(); toast('Alertes Telegram enregistrées');
+});
+
 // Suppression définitive de collections entières (administrateur). Lit le serveur, puis supprime par paquets de 400.
 async function purgeCols(cols, onProgress) {
   let n = 0;
@@ -1644,7 +1673,7 @@ function checkout(w) {
   if (newCl) b.set('clients', newCl.id, newCl); else if (cl) b.upd('clients', cl.id, { debt: inc(pay.credit), spent: inc(t.total), last: ts });
   jr(b, 'Vente', `Vente ${no} — ${items.length} article(s)${cl ? ' — ' + cl.name : ''}${bonusArr.length ? ' — bonus offert : ' + bonusTxt(bonusArr) : ''}`, t.total, 'USD', '', id);
   if (newCl) jr(b, 'Client', `Fiche client créée automatiquement depuis un passant : ${newCl.name} (${newCl.phone}) — vente ${no} (par ${who()})`, null, '', '', newCl.id);
-  b.commit();
+  b.commit(); tgSale(sale, need);
   cart = []; ck = freshCk();
   w.close(); toast(newCl ? 'Vente enregistrée — fiche client créée : ' + newCl.name : 'Vente enregistrée'); views.sales($('#view')); showReceipt(sale);
 }
@@ -1694,7 +1723,7 @@ A.retsale = d => {
     if (v.mode === 'credit') b.upd('clients', cl.id, { debt: inc(-tot), spent: inc(-tot) });
     else { const nat = ['CDF', 'MMC'].includes(v.mode) ? Math.round(tot * (s.rate || S.settings.rate)) : tot; cashop(b, 'refund', v.mode, -nat, 'Retour ' + no + ' (vente ' + s.no + ')', id); if (cl) b.upd('clients', cl.id, { spent: inc(-tot) }); }
     jr(b, 'Retour', `Retour ${no} sur la vente ${s.no} — ${L.map(x => x.q + ' ' + x.i.unit + ' ' + x.i.name).join(', ')} — ${rest ? 'remis en stock' : 'rebut'} — remboursé : ${v.mode === 'credit' ? 'avoir client' : v.mode} — motif : ${v.why.trim()} (par ${who()})`, tot, 'USD', '', id);
-    b.commit(); toast('Retour enregistré'); setTimeout(() => showReceipt(sale), 250);
+    b.commit(); toast('Retour enregistré'); tgNotify('ret', `↩️ Retour ${no} sur ${s.no} : ${fmAt(tot, s.rate)} (${rest ? 'remis en stock' : 'rebut'}) — ${v.why.trim()}`); setTimeout(() => showReceipt(sale), 250);
   });
 };
 A.invoice = d => {
@@ -1741,7 +1770,7 @@ A.cancelsale0 = async (d, why = '') => {
   [['usd', 'USD'], ['cdf', 'CDF'], ['mm', 'MM'], ['mmc', 'MMC'], ['bank', 'BANK']].forEach(([k, acc]) => { if (p[k] > 0) cashop(b, 'cancel', acc, -p[k], 'Annulation ' + s.no, s.id); });
   if (s.clientId && S.clients.some(c => c.id === s.clientId)) b.upd('clients', s.clientId, { debt: inc(-(p.credit || 0)), spent: inc(-s.total) });
   jr(b, 'Annulation', `Annulation de la vente ${s.no} par ${who()}` + (why ? ` [journée verrouillée — justification : ${why}]` : ''), s.total, 'USD', '', s.id);
-  b.commit(); toast('Vente annulée');
+  b.commit(); toast('Vente annulée'); tgNotify('cancel', `❌ Vente annulée ${s.no} : ${fmAt(s.total, s.rate)}${why ? '\nJustification : ' + why : ''}`);
   askJustif('sale', s.id, `Annulation de la vente ${s.no} (${fmAt(s.total, s.rate)})`);
 };
 
@@ -2306,7 +2335,7 @@ A.cclose = () => {
     b.upd('sessions', ses.id, { status: 'closed', closeTs: ts, closeUser: who(), theo: { USD: r00(bal.USD), CDF: Math.round(bal.CDF) }, phys, diff });
     ['CDF', 'USD'].forEach(c => { if (Math.abs(diff[c]) > 0.004) cashop(b, 'ecart', c, diff[c], 'Écart à la clôture', ses.id); });
     jr(b, 'Clôture caisse', `Théorique ${cdf(bal.CDF)}/${usdx(bal.USD)} — physique ${cdf(phys.CDF)}/${usdx(phys.USD)} — écart ${cdf(diff.CDF)}/${usdx(diff.USD)}`, diff.CDF, 'CDF', '', ses.id);
-    b.commit(); toast('Caisse clôturée');
+    b.commit(); toast('Caisse clôturée'); if (diff.CDF !== 0 || diff.USD !== 0) tgNotify('ecart', `🧾 Écart de caisse à la clôture : ${cdf(diff.CDF)} / ${usdx(diff.USD)}`);
     if (diff.CDF !== 0 || diff.USD !== 0) askJustif('cash', ses.id, `Écart de caisse à la clôture : ${cdf(diff.CDF)} / ${usdx(diff.USD)}`);
   }, {
     onOpen: (w, f) => f.addEventListener('input', () => {
@@ -3820,6 +3849,13 @@ views.settings = el => {
     <h4>Propriétaire (rapport hebdomadaire)</h4><div class="two">${fld('Téléphone WhatsApp', 'ownerPhone', s.ownerPhone || '')}${fld('E-mail', 'ownerEmail', s.ownerEmail || '', 'email')}</div>
     <h4>Remises automatiques par catégorie de client (%)</h4><div class="two">${fld('Grossiste', 'tp_gros', tp.gros, 'number', 'step="any" min="0" max="90"')}${fld('Client fidèle', 'tp_fidele', tp.fidele, 'number', 'step="any" min="0" max="90"')}</div>${fld('Client VIP', 'tp_vip', tp.vip, 'number', 'step="any" min="0" max="90"')}
     <h4>Seuils de fidélité (achats cumulés en ${s.mainCur})</h4><div class="two">${fld('Fidèle à partir de', 'tm_fidele', tm.fidele, 'number')}${fld('VIP à partir de', 'tm_vip', tm.vip, 'number')}</div><button class="btn">Enregistrer</button></form>
+    <form class="card frm" id="tgf"><h3>📲 Alertes Telegram</h3><p class="muted sm">Le bot vous écrit sur Telegram quand quelqu'un fait une opération importante, même si votre application est fermée. Le jeton est secret : ne le partagez pas. En cas de doute (employé parti), refaites-en un avec @BotFather → /revoke.</p>
+      <label class="chk"><input type="checkbox" name="tgOn" ${s.tgToken && s.tgOff !== true ? 'checked' : (!s.tgToken ? 'checked' : '')}> Alertes activées</label>
+      <label>Jeton du bot<input id="tgtok" name="tgToken" type="password" autocomplete="off" value="${esc(s.tgToken || '')}" placeholder="123456:ABC…"></label>
+      <label>Numéro de discussion (chat id)<input id="tgchat" name="tgChat" inputmode="numeric" value="${esc(s.tgChat || '')}" placeholder="ex. 123456789 (ou -100… pour un groupe)"></label>
+      ${fld('Une vente est « grosse » à partir de (USD)', 'tgBig', s.tgBig || 100, 'number', 'step="any" min="0.01"')}
+      <b class="sm">Événements qui déclenchent une alerte</b><div class="chkgrid">${[['sale', 'Grosse vente'], ['stock', 'Rupture / stock faible'], ['cancel', 'Annulation de vente'], ['ret', 'Retour / remboursement'], ['ecart', 'Écart de caisse']].map(([k, l]) => `<label class="chk"><input type="checkbox" name="ev_${k}" ${(s.tgEv ? s.tgEv[k] !== false : true) ? 'checked' : ''}> ${l}</label>`).join('')}</div>
+      <div class="row wrap"><button class="btn">Enregistrer</button><button type="button" class="btn ghost" data-act="tgtest">Envoyer un message de test</button></div></form>
     <div class="card"><h3>Promotions datées</h3><button class="btn ghost sm" data-act="promoadd">+ Nouvelle promotion</button>${(s.promos || []).map((p, i) => `<div class="mi"><span><b>${esc(p.name)}</b> −${p.pct}% — ${esc(p.from)} → ${esc(p.to)} ${p.pid ? '· ' + esc(S.products.find(x => x.id === p.pid)?.name || 'produit') : '· tous produits'}</span><button class="del" data-act="promodel" data-i="${i}">${ic('trash', 16)}</button></div>`).join('') || '<p class="muted sm">Aucune promotion.</p>'}</div>`; }
   if (tab === 'notes') {
     let key = ''; try { key = localStorage.getItem('ksp_ai_key') ? '••••••••' : ''; } catch { /* */ }
