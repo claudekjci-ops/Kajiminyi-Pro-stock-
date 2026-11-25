@@ -338,6 +338,12 @@ html,body{height:100%;overflow:hidden;overscroll-behavior:none}
 .kg{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px}.kpi{background:var(--c,#fff);border:1px solid var(--bd,#e3e8ee);border-radius:14px;padding:12px}.kpi small{display:block;color:var(--mu,#667);font-size:.75rem}.kpi b{font-size:1.15rem}.kpi.r b{color:#c0392b}.kpi.d b{color:#0a8a5a}
 .dt{width:100%;border-collapse:collapse;font-size:.88rem}.dt th,.dt td{padding:7px 8px;border-bottom:1px solid var(--bd,#e3e8ee);text-align:left}.dt td:last-child,.dt th:last-child{text-align:right}
 .pos{color:#0a8a5a}.neg{color:#c0392b}.warn{color:#d98200}
+
+.qt{border-left:3px solid #00a86b;padding:2px 8px;margin:4px 0;font-size:.8rem;opacity:.8}.mact{display:flex;gap:10px;margin-top:3px}.mact button{background:none;border:0;color:var(--mu);font-size:.72rem;padding:2px 0}
+.fcard{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.05);border-radius:12px;padding:8px 10px;margin-top:6px;color:inherit;text-decoration:none}.fcard.cc{flex-wrap:wrap}.cbt{display:flex;gap:6px;margin-left:auto}
+.rbar{display:flex;align-items:center;gap:8px;padding:6px 10px;border-top:1px solid var(--bd);font-size:.82rem;background:rgba(0,168,107,.08)}.rbar span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rbar button{background:none;border:0;font-size:1rem}
+.chmenu{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:10px;border-top:1px solid var(--bd)}.chmenu[hidden]{display:none}.chmenu button{display:flex;flex-direction:column;align-items:center;gap:4px;background:rgba(0,0,0,.05);border:0;border-radius:12px;padding:10px 4px;font-size:.78rem;color:inherit}.chmenu span{font-size:1.4rem}
+.recbar{display:flex;align-items:center;gap:10px;padding:10px}.recdot{width:12px;height:12px;border-radius:50%;background:#e53935;animation:rb 1s infinite}@keyframes rb{50%{opacity:.25}}
 </style>
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -972,6 +978,12 @@ A.lblprint = () => {
 .kg{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px}.kpi{background:var(--c,#fff);border:1px solid var(--bd,#e3e8ee);border-radius:14px;padding:12px}.kpi small{display:block;color:var(--mu,#667);font-size:.75rem}.kpi b{font-size:1.15rem}.kpi.r b{color:#c0392b}.kpi.d b{color:#0a8a5a}
 .dt{width:100%;border-collapse:collapse;font-size:.88rem}.dt th,.dt td{padding:7px 8px;border-bottom:1px solid var(--bd,#e3e8ee);text-align:left}.dt td:last-child,.dt th:last-child{text-align:right}
 .pos{color:#0a8a5a}.neg{color:#c0392b}.warn{color:#d98200}
+
+.qt{border-left:3px solid #00a86b;padding:2px 8px;margin:4px 0;font-size:.8rem;opacity:.8}.mact{display:flex;gap:10px;margin-top:3px}.mact button{background:none;border:0;color:var(--mu);font-size:.72rem;padding:2px 0}
+.fcard{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.05);border-radius:12px;padding:8px 10px;margin-top:6px;color:inherit;text-decoration:none}.fcard.cc{flex-wrap:wrap}.cbt{display:flex;gap:6px;margin-left:auto}
+.rbar{display:flex;align-items:center;gap:8px;padding:6px 10px;border-top:1px solid var(--bd);font-size:.82rem;background:rgba(0,168,107,.08)}.rbar span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rbar button{background:none;border:0;font-size:1rem}
+.chmenu{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:10px;border-top:1px solid var(--bd)}.chmenu[hidden]{display:none}.chmenu button{display:flex;flex-direction:column;align-items:center;gap:4px;background:rgba(0,0,0,.05);border:0;border-radius:12px;padding:10px 4px;font-size:.78rem;color:inherit}.chmenu span{font-size:1.4rem}
+.recbar{display:flex;align-items:center;gap:10px;padding:10px}.recdot{width:12px;height:12px;border-radius:50%;background:#e53935;animation:rb 1s infinite}@keyframes rb{50%{opacity:.25}}
 </style><div class="g">${L.map(p => `<div class="l"><div class="n">${esc(p.name)}</div><div class="p">${usd(p.sell)}</div>${barSvg(p.barcode)}</div>`).join('')}</div>`);
 };
 
@@ -3201,16 +3213,88 @@ views.notifs = el => {
 A.notifon = async () => { try { await Notification.requestPermission(); } catch { /* */ } views.notifs($('#view')); };
 
 /* ================= CHAT & SONDAGES ================= */
-let chTab = 'general';
+let chTab = 'general', chReply = null, chRec = null, chBusy = null;
 const CHS = [['general', 'Général'], ['annonces', 'Annonces'], ['caisse', 'Caisse'], ['stock', 'Stock'], ['admin', 'Administration'], ['polls', 'Sondages']];
+const cdCfg = () => ({ name: S.settings.cdName || 'q7igb6x7', preset: S.settings.cdPreset || 'kajiminyi_chat' });
+const myMail = () => (S.user.email || '').toLowerCase();
+const dmKey = e => 'dm:' + [myMail(), String(e).toLowerCase()].sort().join('|');
+const dmOther = k => k.slice(3).split('|').find(x => x !== myMail()) || '';
+const chName = k => k.startsWith('dm:') ? '✉️ ' + (S.users.find(u => u.id === dmOther(k))?.name || dmOther(k)) : (CHS.find(c => c[0] === k)?.[1] || k);
+const dmKeys = () => { const s = new Set(); S.messages.forEach(m => { if (typeof m.ch === 'string' && m.ch.startsWith('dm:') && m.ch.slice(3).split('|').includes(myMail())) s.add(m.ch); }); if (chTab.startsWith('dm:')) s.add(chTab); return [...s]; };
+const fmtSize = b => b > 1048576 ? (b / 1048576).toFixed(1) + ' Mo' : Math.max(1, Math.round(b / 1024)) + ' Ko';
+const linkify = h => h.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+const thumb = u => u.replace('/upload/', '/upload/w_700,q_auto,f_auto/');
+function fileHtml(f) {
+  if (!f || !f.url) return '';
+  if (f.kind === 'image') return `<a href="${esc(f.url)}" target="_blank" rel="noopener"><img src="${esc(thumb(f.url))}" loading="lazy" style="max-width:100%;border-radius:12px;margin-top:6px" alt="${esc(f.name || 'photo')}"></a>`;
+  if (f.kind === 'video') return `<video controls preload="metadata" playsinline src="${esc(f.url)}" style="max-width:100%;border-radius:12px;margin-top:6px"></video>`;
+  if (f.kind === 'audio') return `<audio controls preload="none" src="${esc(f.url)}" style="width:100%;margin-top:6px"></audio>${f.dur ? `<small class="muted">🎤 ${Math.floor(f.dur / 60)}:${String(f.dur % 60).padStart(2, '0')}</small>` : ''}`;
+  return `<a class="fcard" href="${esc(f.url)}" target="_blank" rel="noopener">📄 <span><b>${esc(f.name || 'Document')}</b><br><small>${f.size ? fmtSize(f.size) : ''} · Ouvrir</small></span></a>`;
+}
+const contactHtml = c => !c ? '' : `<div class="fcard cc">👤 <span><b>${esc(c.name)}</b><br><small>${esc(c.phone || '')}</small></span><span class="cbt">${c.phone ? `<a class="btn ghost sm" href="tel:${esc(c.phone)}">Appeler</a><a class="btn green sm" target="_blank" rel="noopener" href="https://wa.me/${waPh2(c.phone)}">WhatsApp</a>` : ''}</span></div>`;
+const locHtml = l => !l ? '' : `<a class="fcard" target="_blank" rel="noopener" href="https://maps.google.com/?q=${l.lat},${l.lng}">📍 <span><b>Position partagée</b><br><small>Ouvrir sur la carte</small></span></a>`;
+const chMsgs = () => S.messages.filter(m => m.ch === chTab).sort((a, b) => a.ts - b.ts).slice(-150);
 function paintChat() {
-  const box = $('#chatlist'); if (!box) return; const near = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
-  const L = S.messages.filter(m => m.ch === chTab).sort((a, b) => a.ts - b.ts).slice(-120);
-  box.innerHTML = L.map(m => `<div class="msg ${m.uid === S.user.uid ? 'me' : ''} ${m.announce ? 'ann' : ''}"><small><b>${esc(m.user)}</b> · ${fmtDate(m.ts)}</small><div>${esc(m.text)}</div>${attHtml(m.att)}</div>`).join('') || '<p class="muted" style="text-align:center">Aucun message. Écrivez le premier !</p>';
+  const box = $('#chatlist'); if (!box) return; const near = box.scrollHeight - box.scrollTop - box.clientHeight < 90;
+  box.innerHTML = chMsgs().map(m => { const me = m.uid === S.user.uid;
+    const body = m.deleted ? '<i class="muted">Message supprimé</i>' : `${m.reply ? `<div class="qt"><b>${esc(m.reply.user)}</b><br>${esc(m.reply.text)}</div>` : ''}${m.text ? `<div>${linkify(esc(m.text))}</div>` : ''}${fileHtml(m.file)}${contactHtml(m.contact)}${locHtml(m.loc)}${attHtml(m.att)}`;
+    return `<div class="msg ${me ? 'me' : ''} ${m.announce ? 'ann' : ''}"><small><b>${esc(m.user)}</b> · ${fmtDate(m.ts)}</small>${body}${m.deleted ? '' : `<div class="mact"><button data-act="chreply" data-id="${m.id}" title="Répondre">↩ Répondre</button>${me || isMgr() ? `<button data-act="chdel" data-id="${m.id}" title="Supprimer">🗑</button>` : ''}</div>`}</div>`; }).join('') || '<p class="muted" style="text-align:center">Aucun message. Écrivez le premier !</p>';
   if (near || !box.dataset.init) { box.scrollTop = box.scrollHeight; box.dataset.init = 1; }
 }
+function paintBar() {
+  const bar = $('#chbar'); if (!bar) return; const keep = bar.querySelector('input[name=text]')?.value || '';
+  const locked = chTab === 'annonces' && !isMgr();
+  if (locked) { bar.innerHTML = '<p class="muted sm" style="padding:8px">Seuls l\'administrateur et le gérant publient des annonces.</p>'; return; }
+  if (chRec) { bar.innerHTML = `<div class="recbar"><span class="recdot"></span><b id="rect">0:00</b><span class="muted sm">Enregistrement…</span><button class="btn ghost sm" data-act="recx">✕ Annuler</button><button class="btn sm" data-act="recok">${ic('send', 16)} Envoyer</button></div>`; return; }
+  bar.innerHTML = `${chReply ? `<div class="rbar">↩ <span>Réponse à <b>${esc(chReply.user)}</b> : ${esc(chReply.text)}</span><button data-act="chnoreply">✕</button></div>` : ''}${chBusy ? `<div class="rbar">⏫ Envoi de ${esc(chBusy.name)}… <b id="chpct">${chBusy.pct || 0}%</b></div>` : ''}
+    <div id="chmenu" class="chmenu" hidden>${[['photo', '📷', 'Photo'], ['gallery', '🖼️', 'Galerie / vidéo'], ['doc', '📄', 'Document'], ['audio', '🎵', 'Audio'], ['contact', '👤', 'Contact'], ['loc', '📍', 'Position']].map(([k, i, t]) => `<button data-act="${k === 'contact' ? 'chcontact' : k === 'loc' ? 'chloc' : 'chpick'}" data-k="${k}"><span>${i}</span>${t}</button>`).join('')}</div>
+    <form id="chatf" class="chatbar"><button type="button" class="clip" data-act="chmenu" title="Joindre">📎</button><input name="text" placeholder="${chTab === 'admin' && !isMgr() ? 'Message à l\'administration…' : 'Votre message…'}" autocomplete="off" value="${esc(keep)}"><button type="button" class="clip" data-act="recgo" title="Message vocal">🎤</button><button class="btn">${ic('send', 18)}</button></form>`;
+  $('#chatf', bar).addEventListener('submit', e => { e.preventDefault(); const t = e.target.text.value.trim(); if (!t) return; sendMsg({ text: t }); e.target.reset(); });
+}
+async function sendMsg(extra) {
+  try { const id = uid(), m = { id, ts: Date.now(), uid: S.user.uid, user: who(), email: S.user.email, ch: chTab, text: '', announce: chTab === 'annonces', ...extra }; if (chReply) m.reply = chReply; const b = batch(); b.set('messages', id, m); b.commit(); chReply = null; paintBar(); }
+  catch (e) { toast(e.message || 'Envoi impossible', 'err'); }
+}
+function upCloud(blob, name, onp) {
+  return new Promise((ok, ko) => { const c = cdCfg(), fd = new FormData(); fd.append('file', blob, name); fd.append('upload_preset', c.preset); const x = new XMLHttpRequest(); x.open('POST', `https://api.cloudinary.com/v1_1/${c.name}/auto/upload`);
+    x.upload.onprogress = e => e.lengthComputable && onp(Math.round(e.loaded / e.total * 100)); x.onerror = () => ko(new Error('Pas de connexion Internet : fichier non envoyé'));
+    x.onload = () => { let j = {}; try { j = JSON.parse(x.responseText); } catch { /* */ } if (x.status >= 200 && x.status < 300 && j.secure_url) ok(j); else ko(new Error('Envoi refusé : ' + (j.error?.message || x.status))); }; x.send(fd); });
+}
+async function sendFile(file, extra = {}) {
+  if (!file) return; if (!navigator.onLine) return toast('Pas de connexion Internet : fichier non envoyé', 'err');
+  const kind = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : file.type.startsWith('audio/') ? 'audio' : 'doc', max = kind === 'doc' ? 10 : 40;
+  if (file.size > max * 1048576 && kind !== 'image') return toast(`Fichier trop lourd (${max} Mo maximum)`, 'err');
+  chBusy = { name: file.name || 'fichier', pct: 0 }; paintBar();
+  try { let blob = file; if (kind === 'image') { const d = await resizeImage(file, 1600); blob = await (await fetch(d)).blob(); }
+    const j = await upCloud(blob, file.name || 'fichier', p => { chBusy.pct = p; const el = $('#chpct'); if (el) el.textContent = p + '%'; });
+    chBusy = null; await sendMsg({ file: { url: j.secure_url, kind, name: file.name || j.original_filename || 'fichier', size: j.bytes || file.size, ...(extra.dur ? { dur: extra.dur } : {}) } }); }
+  catch (e) { chBusy = null; paintBar(); toast(e.message || 'Envoi impossible', 'err'); }
+}
+const recTick = () => { const r = chRec; if (!r) return; const s = Math.floor((Date.now() - r.t0) / 1000), el = $('#rect'); if (el) el.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); if (s >= 300) A.recok(); };
+A.recgo = async () => {
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return toast("L'enregistrement vocal n'est pas disponible sur cet appareil", 'err');
+  try { const st = await navigator.mediaDevices.getUserMedia({ audio: true }), mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find(t => MediaRecorder.isTypeSupported?.(t)) || '', mr = new MediaRecorder(st, mime ? { mimeType: mime } : {}), chunks = [];
+    mr.ondataavailable = e => e.data.size && chunks.push(e.data); chRec = { mr, st, chunks, t0: Date.now(), mime: mr.mimeType || mime, tick: setInterval(recTick, 400) }; mr.start(); paintBar(); }
+  catch { toast("Micro refusé : autorisez le micro pour l'application dans les réglages du téléphone", 'err'); }
+};
+const recEnd = send => { const r = chRec; if (!r) return; clearInterval(r.tick); chRec = null; r.mr.onstop = () => { r.st.getTracks().forEach(t => t.stop()); if (send && r.chunks.length) { const type = (r.mime || 'audio/webm').split(';')[0], dur = Math.max(1, Math.round((Date.now() - r.t0) / 1000)); sendFile(new File([new Blob(r.chunks, { type })], 'vocal-' + Date.now() + (type.includes('mp4') ? '.m4a' : '.webm'), { type }), { dur }); } }; try { r.mr.stop(); } catch { r.st.getTracks().forEach(t => t.stop()); } paintBar(); };
+A.recok = () => recEnd(true); A.recx = () => recEnd(false);
+A.chmenu = () => { const m = $('#chmenu'); if (m) m.hidden = !m.hidden; };
+A.chpick = d => { const K = { photo: ['image/*', 'environment'], gallery: ['image/*,video/*'], doc: ['.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,application/*'], audio: ['audio/*'] }[d.k]; if (!K) return; const i = document.createElement('input'); i.type = 'file'; i.accept = K[0]; if (K[1]) i.capture = K[1]; i.multiple = d.k === 'gallery'; i.onchange = async () => { for (const f of i.files) await sendFile(f); }; $('#chmenu').hidden = true; i.click(); };
+A.chloc = () => { $('#chmenu').hidden = true; if (!navigator.geolocation) return toast('Position indisponible', 'err'); navigator.geolocation.getCurrentPosition(p => sendMsg({ loc: { lat: +p.coords.latitude.toFixed(6), lng: +p.coords.longitude.toFixed(6) } }), () => toast('Position refusée : autorisez la localisation', 'err'), { enableHighAccuracy: true, timeout: 12000 }); };
+A.chcontact = () => { const m = $('#chmenu'); if (m) m.hidden = true;
+  const known = [...S.clients.map(c => [c.name, c.phone, 'Client']), ...S.suppliers.map(c => [c.name, c.phone, 'Fournisseur'])].filter(x => x[1]);
+  form('Envoyer un contact', `<label>Contact enregistré<select id="ccsel"><option value="">— Choisir —</option>${known.map((x, i) => `<option value="${i}">${esc(x[0])} (${x[2]})</option>`).join('')}</select></label>${navigator.contacts?.select ? '<button type="button" class="btn ghost sm" data-act="chpc">📱 Choisir dans mon téléphone</button>' : ''}${fld('Nom', 'cname', '', 'text', 'required')}${fld('Téléphone', 'cphone', '', 'tel', 'required')}`, v => { sendMsg({ contact: { name: v.cname.trim(), phone: v.cphone.trim() } }); toast('Contact envoyé'); }, {
+    onOpen: w => { $('#ccsel', w).onchange = e => { const x = known[+e.target.value]; if (!x) return; w.querySelector('[name=cname]').value = x[0]; w.querySelector('[name=cphone]').value = x[1]; }; } }); };
+A.chpc = async () => { try { const r = await navigator.contacts.select(['name', 'tel'], { multiple: false }); if (r[0]) { const w = document.querySelector('.modal-wrap'); w.querySelector('[name=cname]').value = r[0].name?.[0] || ''; w.querySelector('[name=cphone]').value = r[0].tel?.[0] || ''; } } catch { /* annulé */ } };
+A.chreply = d => { const m = S.messages.find(x => x.id === d.id); if (!m) return; chReply = { id: m.id, user: m.user, text: (m.text || (m.file ? '[' + ({ image: 'Photo', video: 'Vidéo', audio: 'Vocal', doc: 'Document' }[m.file.kind] || 'Fichier') + ']' : m.contact ? '[Contact]' : m.loc ? '[Position]' : '')).slice(0, 80) }; paintBar(); $('#chatf input[name=text]')?.focus(); };
+A.chnoreply = () => { chReply = null; paintBar(); };
+A.chdel = async d => { const m = S.messages.find(x => x.id === d.id); if (!m || !(m.uid === S.user.uid || isMgr())) return; if (!await confirmBox('Supprimer ce message pour tout le monde ?', 'Supprimer')) return; const b = batch(); b.upd('messages', m.id, { deleted: true, text: '', file: null, contact: null, loc: null, att: null, reply: null }); b.commit(); };
+A.chdm = () => { const us = S.users.filter(u => u.active && u.id !== myMail());
+  const w = modal('✉️ Discussion privée', `<p class="muted sm">Choisissez la personne avec qui discuter.</p><div class="llist">${us.map(u => `<div class="lrow"><div class="gr"><b>${esc(u.name || u.id)}</b><small>${esc(roleName(u.role))}</small></div><div class="r"><button class="btn sm" data-dmgo="${esc(u.id)}">Écrire</button></div></div>`).join('') || '<p class="muted">Aucun autre utilisateur.</p>'}</div>`);
+  w.querySelectorAll('[data-dmgo]').forEach(b => b.onclick = () => { chTab = dmKey(b.dataset.dmgo); w.close(); views.chat($('#view')); }); };
 views.chat = el => {
-  const tabs = `<div class="chips">${CHS.map(([k, t]) => `<button class="chip ${chTab === k ? 'on' : ''}" data-act="chtab" data-k="${k}">${t}</button>`).join('')}</div>`;
+  const tabs = `<div class="chips">${CHS.map(([k, t]) => `<button class="chip ${chTab === k ? 'on' : ''}" data-act="chtab" data-k="${k}">${t}</button>`).join('')}${dmKeys().map(k => `<button class="chip ${chTab === k ? 'on' : ''}" data-act="chtab" data-k="${esc(k)}">${esc(chName(k))}</button>`).join('')}<button class="chip" data-act="chdm">+ Privé</button></div>`;
   if (chTab === 'polls') {
     live.fn = null;
     el.innerHTML = page('Sondages', isMgr() ? `<button class="btn" data-act="pollform">${ic('plus')} Nouveau sondage</button>` : '', tabs + [...S.polls].sort((a, b) => b.ts - a.ts).map(p => {
@@ -3221,16 +3305,11 @@ views.chat = el => {
     }).join('') || '<p class="muted">Aucun sondage.</p>');
     return;
   }
-  const locked = chTab === 'annonces' && !isMgr(), adminCh = chTab === 'admin' && !isMgr();
-  el.innerHTML = page('Chat', '', `${tabs}<div class="chatbox"><div id="chatlist" class="chatlist"></div>
-    ${locked ? '<p class="muted sm" style="padding:8px">Seuls l\'administrateur et le gérant publient des annonces.</p>' : `<form id="chatf" class="chatbar"><label class="clip">📎<input type="file" id="chfile" accept="image/*,application/pdf" hidden></label><input name="text" placeholder="${adminCh ? 'Message à l\'administration…' : 'Votre message…'}" autocomplete="off"><button class="btn">${ic('send', 18)}</button></form>`}</div>`);
-  live.fn = paintChat; paintChat();
-  $('#chatf')?.addEventListener('submit', async e => {
-    e.preventDefault(); const text = e.target.text.value.trim(), file = $('#chfile').files[0]; if (!text && !file) return;
-    try { const att = file ? await readAttach(file) : null, id = uid(), b = batch(); b.set('messages', id, { id, ts: Date.now(), uid: S.user.uid, user: who(), email: S.user.email, ch: chTab, text, att, announce: chTab === 'annonces' }); b.commit(); e.target.reset(); } catch (err) { toast(err.message, 'err'); }
-  });
+  el.innerHTML = page('Chat', '', `${tabs}<div class="chatbox"><div id="chatlist" class="chatlist"></div><div id="chbar"></div></div>`);
+  live.fn = paintChat; paintChat(); paintBar();
 };
-A.chtab = d => { chTab = d.k; views.chat($('#view')); };
+A.chtab = d => { chTab = d.k; chReply = null; views.chat($('#view')); };
+
 A.pollform = () => form('Nouveau sondage', `${fld('Question', 'q', '', 'text', 'required')}<label>Options (une par ligne, 2 minimum)<textarea name="opts" rows="4" required></textarea></label>`, async v => {
   const options = v.opts.split('\n').map(s => s.trim()).filter(Boolean); if (options.length < 2) throw new Error('Ajoutez au moins 2 options');
   const b = batch(), id = uid(); b.set('polls', id, { id, ts: Date.now(), q: v.q.trim(), options, votes: {}, closed: false, by: who() }); jr(b, 'Sondage', 'Sondage créé : ' + v.q); b.commit(); toast('Sondage créé');
