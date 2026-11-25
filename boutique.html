@@ -56,14 +56,16 @@ label{display:block;font-size:.85rem;color:var(--mu);margin:10px 0 4px}
 .tl{display:flex;justify-content:space-between;margin:16px 0;position:relative}
 .tl div{flex:1;text-align:center;font-size:.72rem;color:var(--mu)}.tl div i{display:block;width:26px;height:26px;border-radius:50%;background:var(--bd);margin:0 auto 4px;line-height:26px;font-style:normal;color:#fff}
 .tl div.on{color:var(--g);font-weight:700}.tl div.on i{background:var(--g)}
+.warn{background:#E4572E18;border:2px solid #E4572E;border-radius:14px;padding:12px 14px;margin:0 0 12px;font-size:.92rem;line-height:1.4;color:var(--tx)}.warn b{color:#E4572E}
+.pr s{color:var(--mu);font-weight:400;font-size:.85rem;margin-right:6px}.dc{display:inline-block;background:#E4572E;color:#fff;font-size:.7rem;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:4px;vertical-align:middle}
 .empty{text-align:center;color:var(--mu);padding:40px 10px}
 footer{text-align:center;color:var(--mu);font-size:.8rem;padding:20px 14px}
 .toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:#14231c;color:#fff;padding:10px 16px;border-radius:20px;font-size:.9rem;z-index:99;opacity:0;pointer-events:none;transition:.25s}.toast.on{opacity:1}
 </style>
 </head>
 <body>
-<header><div class="hd"><span id="logo"><i>ðŸ›ï¸</i></span><div><b id="shop">Boutique</b><small id="sub">Commandez en ligne</small></div><a href="#" id="mine">Mes commandes</a></div></header>
-<main id="main"><div class="empty">Chargementâ€¦</div></main>
+<header><div class="hd"><span id="logo"><i>&#x1F6CD;&#xFE0F;</i></span><div><b id="shop">Boutique</b><small id="sub">Commandez en ligne</small></div><a href="#" id="mine">Mes commandes</a></div></header>
+<main id="main"><div class="empty">Chargement&#x2026;</div></main>
 <footer id="foot"></footer>
 <div class="bar" id="bar"><button class="btn" id="bbtn"><span id="bn">Voir mon panier</span><b id="bt"></b></button></div>
 <div class="sheet" id="sheet"><div class="sh" id="sh"></div></div>
@@ -79,9 +81,12 @@ try { cart = JSON.parse(localStorage.getItem('ksp_cart') || '[]'); } catch { car
 const saveCart = () => { try { localStorage.setItem('ksp_cart', JSON.stringify(cart)); } catch { /* */ } };
 const myOrders = () => { try { return JSON.parse(localStorage.getItem('ksp_orders') || '[]'); } catch { return []; } };
 const fmt = (usd) => { const r = cfg?.rate || 1, c = Math.round(usd * r).toLocaleString('fr-FR') + ' FC', u = '$' + (Math.round(usd * 100) / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); return cfg?.cur === 'USD' ? [u, c] : [c, u]; };
+const mk = () => Math.max(0, +cfg?.mark || 0);
+const oldP = usd => { const m = 1 + mk() / 100, r = cfg?.rate || 1; return cfg?.cur === 'USD' ? '$' + (Math.round(usd * m * 100) / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : (Math.round(usd * m * r / 100) * 100).toLocaleString('fr-FR') + ' FC'; };
+const dcPct = () => Math.round((1 - 1 / (1 + mk() / 100)) * 100);
 const toast = m => { const t = $('#toast'); t.textContent = m; t.classList.add('on'); setTimeout(() => t.classList.remove('on'), 2200); };
 const rid = n => { const a = new Uint8Array(n); crypto.getRandomValues(a); return [...a].map(x => 'abcdefghijkmnpqrstuvwxyz23456789'[x % 32]).join(''); };
-const ST = [['new', 'ReÃ§ue'], ['confirmed', 'ConfirmÃ©e'], ['ready', 'PrÃªte'], ['done', 'TerminÃ©e']];
+const ST = [['new', 'Re\u00e7ue'], ['confirmed', 'Confirm\u00e9e'], ['ready', 'Pr\u00eate'], ['done', 'Termin\u00e9e']];
 const openSheet = h => { $('#sh').innerHTML = h; $('#sheet').classList.add('on'); };
 const closeSheet = () => { $('#sheet').classList.remove('on'); if (unsub) { unsub(); unsub = null; } };
 $('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet' || e.target.closest('[data-x]')) closeSheet(); });
@@ -90,95 +95,95 @@ async function load() {
   try {
     const snap = await getDocs(collection(db, 'shop')); prods = []; cfg = null;
     snap.docs.forEach(d => { if (d.id === '_cfg') cfg = d.data(); else prods.push(d.data()); });
-  } catch (e) { $('#main').innerHTML = '<div class="empty">Impossible de charger la boutique.<br>VÃ©rifiez votre connexion et rÃ©essayez.</div>'; return; }
-  if (!cfg || !cfg.open) { $('#main').innerHTML = `<div class="empty"><div style="font-size:3rem">ðŸ”’</div><b>${esc(cfg?.name || 'Boutique')}</b><br>La boutique en ligne est fermÃ©e pour le moment.</div>`; $('#shop').textContent = cfg?.name || 'Boutique'; return; }
+  } catch (e) { $('#main').innerHTML = '<div class="empty">Impossible de charger la boutique.<br>V\u00e9rifiez votre connexion et r\u00e9essayez.</div>'; return; }
+  if (!cfg || !cfg.open) { $('#main').innerHTML = `<div class="empty"><div style="font-size:3rem">\ud83d\udd12</div><b>${esc(cfg?.name || 'Boutique')}</b><br>La boutique en ligne est ferm\u00e9e pour le moment.</div>`; $('#shop').textContent = cfg?.name || 'Boutique'; return; }
   document.title = cfg.name; $('#shop').textContent = cfg.name; $('#sub').textContent = cfg.addr || 'Commandez en ligne';
   if (cfg.logo) $('#logo').innerHTML = `<img src="${esc(cfg.logo)}" alt="">`; else $('#logo').innerHTML = `<i>${esc((cfg.name || 'B')[0])}</i>`;
-  $('#foot').innerHTML = `${esc(cfg.name)}${cfg.addr ? ' Â· ' + esc(cfg.addr) : ''}${cfg.phone ? '<br>ðŸ“ž ' + esc(cfg.phone) : ''}`;
+  $('#foot').innerHTML = `${esc(cfg.name)}${cfg.addr ? ' \u00b7 ' + esc(cfg.addr) : ''}${cfg.phone ? '<br>\ud83d\udcde ' + esc(cfg.phone) : ''}`;
   cart = cart.filter(l => prods.some(p => p.id === l.pid)); saveCart();
   paint(); bar();
   const c = new URLSearchParams(location.search).get('c'); if (c) track(c);
 }
 function paint() {
   const L = prods.filter(p => (!cat || p.cat === cat) && (!q || (p.name + ' ' + (p.brand || '')).toLowerCase().includes(q.toLowerCase()))).sort((a, b) => (b.inStock - a.inStock) || a.name.localeCompare(b.name));
-  $('#main').innerHTML = `${cfg.msg ? `<div class="msg">${esc(cfg.msg)}</div>` : ''}
-  <div class="sb"><input id="q" type="search" placeholder="Rechercher un produitâ€¦" value="${esc(q)}" autocomplete="off"></div>
+  $('#main').innerHTML = `<div class="warn">\u26a0\ufe0f <b>NE PAYEZ RIEN EN LIGNE.</b> Vous payez <b>uniquement \u00e0 la r\u00e9ception</b> de votre commande (livraison ou retrait en boutique), en main propre. N'envoyez jamais d'argent avant, m\u00eame si on vous le demande par message ou par appel.</div>${cfg.msg ? `<div class="msg">${esc(cfg.msg)}</div>` : ''}
+  <div class="sb"><input id="q" type="search" placeholder="Rechercher un produit\u2026" value="${esc(q)}" autocomplete="off"></div>
   ${(cfg.cats || []).length > 1 ? `<div class="chips"><button class="chip ${cat ? '' : 'on'}" data-cat="">Tout</button>${cfg.cats.map(c => `<button class="chip ${cat === c.id ? 'on' : ''}" data-cat="${esc(c.id)}">${esc(c.name)}</button>`).join('')}</div>` : ''}
-  <div class="grid">${L.map(p => { const ui = 0, u = p.units[ui], pr = fmt(u.p); return `<div class="p" data-pid="${esc(p.id)}"><div class="im">${p.photo ? `<img loading="lazy" src="${esc(p.photo)}" alt="">` : esc(p.name[0])}${p.inStock ? '' : '<span class="out">Ã‰puisÃ©</span>'}</div>
+  <div class="grid">${L.map(p => { const ui = 0, u = p.units[ui], pr = fmt(u.p); return `<div class="p" data-pid="${esc(p.id)}"><div class="im">${p.photo ? `<img loading="lazy" src="${esc(p.photo)}" alt="">` : esc(p.name[0])}${p.inStock ? '' : '<span class="out">\u00c9puis\u00e9</span>'}</div>
     <div class="bd"><h3>${esc(p.name)}</h3>${p.brand ? `<small>${esc(p.brand)}</small>` : ''}
-    ${p.units.length > 1 ? `<select data-u>${p.units.map((x, i) => `<option value="${i}" ${x.lim > 0 ? '' : 'disabled'}>${esc(x.n)}${x.f > 1 ? ' (Ã—' + x.f + ')' : ''}</option>`).join('')}</select>` : `<small>par ${esc(u.n)}</small>`}
-    <div class="pr" data-pr>${pr[0]}</div><div class="pr2" data-pr2>${pr[1]}</div>
-    <div style="margin-top:auto"><button class="btn" data-add ${p.inStock ? '' : 'disabled'}>${p.inStock ? 'Ajouter' : 'Ã‰puisÃ©'}</button></div></div></div>`; }).join('') || '<div class="empty" style="grid-column:1/-1">Aucun produit trouvÃ©.</div>'}</div>`;
+    ${p.units.length > 1 ? `<select data-u>${p.units.map((x, i) => `<option value="${i}" ${x.lim > 0 ? '' : 'disabled'}>${esc(x.n)}${x.f > 1 ? ' (\u00d7' + x.f + ')' : ''}</option>`).join('')}</select>` : `<small>par ${esc(u.n)}</small>`}
+    <div class="pr"><span data-old>${mk() ? `<s>${oldP(u.p)}</s>` : ''}</span><span data-pr>${pr[0]}</span>${mk() ? `<span class="dc">-${dcPct()}%</span>` : ''}</div><div class="pr2" data-pr2>${pr[1]}</div>
+    <div style="margin-top:auto"><button class="btn" data-add ${p.inStock ? '' : 'disabled'}>${p.inStock ? 'Ajouter' : '\u00c9puis\u00e9'}</button></div></div></div>`; }).join('') || '<div class="empty" style="grid-column:1/-1">Aucun produit trouv\u00e9.</div>'}</div>`;
 }
 document.addEventListener('input', e => { if (e.target.id === 'q') { q = e.target.value; const pos = e.target.selectionStart; paint(); const i = $('#q'); i.focus(); i.setSelectionRange(pos, pos); } });
 document.addEventListener('change', e => {
-  if (e.target.matches('[data-u]')) { const card = e.target.closest('.p'), p = prods.find(x => x.id === card.dataset.pid), u = p.units[+e.target.value], pr = fmt(u.p); card.querySelector('[data-pr]').textContent = pr[0]; card.querySelector('[data-pr2]').textContent = pr[1]; }
+  if (e.target.matches('[data-u]')) { const card = e.target.closest('.p'), p = prods.find(x => x.id === card.dataset.pid), u = p.units[+e.target.value], pr = fmt(u.p); card.querySelector('[data-pr]').textContent = pr[0]; const od = card.querySelector('[data-old]'); if (od && mk()) od.innerHTML = '<s>' + oldP(u.p) + '</s>'; card.querySelector('[data-pr2]').textContent = pr[1]; }
 });
 document.addEventListener('click', e => {
   const t = e.target.closest('button,a'); if (!t) return;
   if (t.dataset.cat != null && t.classList.contains('chip')) { cat = t.dataset.cat; paint(); }
   else if (t.hasAttribute('data-add')) { const card = t.closest('.p'), p = prods.find(x => x.id === card.dataset.pid), ui = +(card.querySelector('[data-u]')?.value || 0), u = p.units[ui];
-    const l = cart.find(x => x.pid === p.id && x.ui === ui), have = l ? l.qty : 0; if (have + 1 > u.lim) return toast('QuantitÃ© maximale disponible atteinte');
-    if (l) l.qty++; else cart.push({ pid: p.id, ui, qty: 1 }); saveCart(); bar(); toast(p.name + ' ajoutÃ©'); }
+    const l = cart.find(x => x.pid === p.id && x.ui === ui), have = l ? l.qty : 0; if (have + 1 > u.lim) return toast('Quantit\u00e9 maximale disponible atteinte');
+    if (l) l.qty++; else cart.push({ pid: p.id, ui, qty: 1 }); saveCart(); bar(); toast(p.name + ' ajout\u00e9'); }
   else if (t.id === 'bbtn') openCart();
   else if (t.id === 'mine') { e.preventDefault(); openMine(); }
 });
 const lineP = l => { const p = prods.find(x => x.id === l.pid), u = p?.units[l.ui]; return p && u ? { p, u, l } : null; };
 const total = () => cart.reduce((s, l) => { const x = lineP(l); return s + (x ? x.u.p * l.qty : 0); }, 0);
-function bar() { const n = cart.reduce((s, l) => s + l.qty, 0); $('#bar').classList.toggle('on', n > 0 && cfg?.open); $('#bn').textContent = `ðŸ›’ Voir mon panier (${n})`; $('#bt').textContent = fmt(total())[0]; }
+function bar() { const n = cart.reduce((s, l) => s + l.qty, 0); $('#bar').classList.toggle('on', n > 0 && cfg?.open); $('#bn').textContent = `\ud83d\uded2 Voir mon panier (${n})`; $('#bt').textContent = fmt(total())[0]; }
 function openCart() {
   if (!cart.length) return;
   const ls = cart.map(lineP).filter(Boolean);
-  openSheet(`<h2>Mon panier <button class="x" data-x>âœ•</button></h2>${ls.map(({ p, u, l }, i) => `<div class="ln"><div class="t"><b>${esc(p.name)}</b><small>${esc(u.n)} Â· ${fmt(u.p)[0]}</small></div><div class="q"><button data-m="${i}">âˆ’</button><b>${l.qty}</b><button data-p="${i}">+</button></div><b>${fmt(u.p * l.qty)[0]}</b></div>`).join('')}
+  openSheet(`<h2>Mon panier <button class="x" data-x>\u2715</button></h2>${ls.map(({ p, u, l }, i) => `<div class="ln"><div class="t"><b>${esc(p.name)}</b><small>${esc(u.n)} \u00b7 ${fmt(u.p)[0]}</small></div><div class="q"><button data-m="${i}">\u2212</button><b>${l.qty}</b><button data-p="${i}">+</button></div><b>${fmt(u.p * l.qty)[0]}</b></div>`).join('')}
   <div class="tot"><span>Total</span><span>${fmt(total())[0]}</span></div><div class="pr2" style="text-align:right;margin-top:-10px">${fmt(total())[1]}</div>
   <form id="of" autocomplete="on"><label>Votre nom *<input type="text" name="name" required maxlength="80" autocomplete="name"></label>
-  <label>TÃ©lÃ©phone (WhatsApp si possible) *<input type="tel" name="phone" required maxlength="20" inputmode="tel" autocomplete="tel" placeholder="Ex. 0991234567"></label>
-  <label>Comment recevoir votre commande ?</label><div class="seg"><label><input type="radio" name="mode" value="delivery" checked> <span>ðŸšš Livraison</span></label><label><input type="radio" name="mode" value="pickup"> <span>ðŸª Retrait en boutique</span></label></div>
-  <div id="adw"><label>Adresse de livraison *<input type="text" name="addr" maxlength="200" placeholder="Quartier, avenue, numÃ©ro, repÃ¨re"></label>${cfg.deliv ? `<div class="info">ðŸšš ${esc(cfg.deliv)}</div>` : ''}</div>
-  <label>Paiement</label><div class="seg"><label><input type="radio" name="pay" value="cash" checked> <span>ðŸ’µ EspÃ¨ces (Ã  la remise)</span></label><label><input type="radio" name="pay" value="momo"> <span>ðŸ“± Mobile Money</span></label></div>
-  ${cfg.momo ? `<div class="info" id="momoi" hidden>ðŸ“± ${esc(cfg.momo)}\nEnvoyez le montant puis nous confirmerons votre commande.</div>` : ''}
+  <label>T\u00e9l\u00e9phone (WhatsApp si possible) *<input type="tel" name="phone" required maxlength="20" inputmode="tel" autocomplete="tel" placeholder="Ex. 0991234567"></label>
+  <label>Comment recevoir votre commande ?</label><div class="seg"><label><input type="radio" name="mode" value="delivery" checked> <span>\ud83d\ude9a Livraison</span></label><label><input type="radio" name="mode" value="pickup"> <span>\ud83c\udfea Retrait en boutique</span></label></div>
+  <div id="adw"><label>Adresse de livraison *<input type="text" name="addr" maxlength="200" placeholder="Quartier, avenue, num\u00e9ro, rep\u00e8re"></label>${cfg.deliv ? `<div class="info">\ud83d\ude9a ${esc(cfg.deliv)}</div>` : ''}</div>
+  <label>Comment paierez-vous \u00e0 la r\u00e9ception ?</label><div class="seg"><label><input type="radio" name="pay" value="cash" checked> <span>\ud83d\udcb5 Esp\u00e8ces \u00e0 la remise</span></label><label><input type="radio" name="pay" value="momo"> <span>\ud83d\udcf1 Mobile Money \u00e0 la remise</span></label></div>
+  ${cfg.momo ? `<div class="info" id="momoi" hidden>\ud83d\udcf1 Paiement Mobile Money <b>uniquement \u00e0 la r\u00e9ception</b>, au livreur ou en boutique :\n${esc(cfg.momo)}</div>` : ''}
   <label>Remarque (facultatif)<textarea name="note" rows="2" maxlength="300"></textarea></label><input class="hp" name="website" tabindex="-1" autocomplete="off">
-  <button class="btn" id="osend" style="margin-top:14px">Envoyer ma commande</button><p class="pr2" style="text-align:center">Vous serez rappelÃ© pour confirmation. Aucun paiement en ligne n'est demandÃ© maintenant.</p></form>`);
+  <button class="btn" id="osend" style="margin-top:14px">Envoyer ma commande</button><p class="pr2" style="text-align:center">\u26a0\ufe0f Ne payez rien maintenant. Vous serez rappel\u00e9 pour confirmation, et vous paierez \u00e0 la r\u00e9ception.</p></form>`);
   const f = $('#of'), sync = () => { $('#adw').hidden = f.mode.value !== 'delivery'; const m = $('#momoi'); if (m) m.hidden = f.pay.value !== 'momo'; };
   f.addEventListener('change', sync); sync();
   try { const s = JSON.parse(localStorage.getItem('ksp_cust') || '{}'); if (s.name) f.name.value = s.name; if (s.phone) f.phone.value = s.phone; if (s.addr) f.addr.value = s.addr; } catch { /* */ }
-  $('#sh').querySelectorAll('[data-m],[data-p]').forEach(b => b.onclick = () => { const i = +(b.dataset.m ?? b.dataset.p), l = cart[i], x = lineP(l); if (b.dataset.m != null) { l.qty--; if (l.qty <= 0) cart.splice(i, 1); } else { if (l.qty + 1 > x.u.lim) return toast('QuantitÃ© maximale atteinte'); l.qty++; } saveCart(); bar(); if (cart.length) openCart(); else closeSheet(); });
+  $('#sh').querySelectorAll('[data-m],[data-p]').forEach(b => b.onclick = () => { const i = +(b.dataset.m ?? b.dataset.p), l = cart[i], x = lineP(l); if (b.dataset.m != null) { l.qty--; if (l.qty <= 0) cart.splice(i, 1); } else { if (l.qty + 1 > x.u.lim) return toast('Quantit\u00e9 maximale atteinte'); l.qty++; } saveCart(); bar(); if (cart.length) openCart(); else closeSheet(); });
   f.addEventListener('submit', send);
 }
 async function send(e) {
-  e.preventDefault(); const f = e.target; if (f.website.value) return;   // piÃ¨ge anti-robot
+  e.preventDefault(); const f = e.target; if (f.website.value) return;   // pi\u00e8ge anti-robot
   const last = +localStorage.getItem('ksp_last') || 0; if (Date.now() - last < 20000) return toast('Patientez quelques secondes avant une nouvelle commande');
   const name = f.name.value.trim(), phone = f.phone.value.trim(), mode = f.mode.value, addr = f.addr.value.trim();
-  if (phone.replace(/\D/g, '').length < 9) return toast('NumÃ©ro de tÃ©lÃ©phone invalide');
+  if (phone.replace(/\D/g, '').length < 9) return toast('Num\u00e9ro de t\u00e9l\u00e9phone invalide');
   if (mode === 'delivery' && addr.length < 5) return toast("Indiquez l'adresse de livraison");
   const items = cart.map(lineP).filter(Boolean).map(({ p, u, l }) => ({ pid: p.id, name: p.name, unit: u.n, qty: l.qty, price: u.p }));
   if (!items.length) return;
   const id = rid(20), no = 'W' + (Date.now() % 1679616).toString(36).toUpperCase().padStart(4, '0') + rid(2).toUpperCase();
   const o = { id, no, ts: Date.now(), status: 'new', src: 'web', name, phone, mode, addr: mode === 'delivery' ? addr : '', pay: f.pay.value, note: f.note.value.trim(), items, total: Math.round(items.reduce((s, i) => s + i.price * i.qty, 0) * 100) / 100, rate: cfg.rate };
-  const b = $('#osend'); b.disabled = true; b.textContent = 'Envoiâ€¦';
+  const b = $('#osend'); b.disabled = true; b.textContent = 'Envoi\u2026';
   try { await Promise.race([setDoc(doc(db, 'orders', id), o), new Promise((_, rj) => setTimeout(() => rj(new Error('timeout')), 20000))]); }
-  catch (err) { b.disabled = false; b.textContent = 'Envoyer ma commande'; return toast('Envoi impossible. VÃ©rifiez votre connexion et rÃ©essayez.'); }
+  catch (err) { b.disabled = false; b.textContent = 'Envoyer ma commande'; return toast('Envoi impossible. V\u00e9rifiez votre connexion et r\u00e9essayez.'); }
   try { localStorage.setItem('ksp_last', String(Date.now())); localStorage.setItem('ksp_cust', JSON.stringify({ name, phone, addr })); const m = myOrders(); m.unshift({ id, no, ts: o.ts }); localStorage.setItem('ksp_orders', JSON.stringify(m.slice(0, 20))); } catch { /* */ }
   cart = []; saveCart(); bar();
-  const link = location.origin + location.pathname + '?c=' + id, txt = `Bonjour, je viens de passer la commande ${no} (${fmt(o.total)[0]}) sur votre boutique.\n${items.map(i => `â€¢ ${i.qty} Ã— ${i.name}`).join('\n')}\nVoir : ${link}`;
-  openSheet(`<div class="ok"><div class="big">âœ…</div><h2 style="justify-content:center">Commande envoyÃ©e !</h2><p>Votre numÃ©ro de commande :</p><div class="no">${esc(no)}</div><p class="pr2">Nous vous appellerons au ${esc(phone)} pour confirmer.</p></div>
-  ${cfg.wa ? `<a class="btn" style="display:block;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/${esc(cfg.wa)}?text=${encodeURIComponent(txt)}">ðŸ’¬ PrÃ©venir la boutique sur WhatsApp</a><div style="height:8px"></div>` : ''}
+  const link = location.origin + location.pathname + '?c=' + id, txt = `Bonjour, je viens de passer la commande ${no} (${fmt(o.total)[0]}) sur votre boutique.\n${items.map(i => `\u2022 ${i.qty} \u00d7 ${i.name}`).join('\n')}\nVoir : ${link}`;
+  openSheet(`<div class="ok"><div class="big">\u2705</div><h2 style="justify-content:center">Commande envoy\u00e9e !</h2><p>Votre num\u00e9ro de commande :</p><div class="no">${esc(no)}</div><p class="pr2">Nous vous appellerons au ${esc(phone)} pour confirmer.</p></div><div class="warn">\u26a0\ufe0f <b>Ne payez rien \u00e0 l'avance.</b> Vous paierez \u00e0 la r\u00e9ception de votre commande.</div>
+  ${cfg.wa ? `<a class="btn" style="display:block;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/${esc(cfg.wa)}?text=${encodeURIComponent(txt)}">\ud83d\udcac Pr\u00e9venir la boutique sur WhatsApp</a><div style="height:8px"></div>` : ''}
   <button class="btn gh" id="tr">Suivre ma commande</button><div style="height:8px"></div><button class="btn gh" data-x>Continuer mes achats</button>`);
   $('#tr').onclick = () => track(id);
 }
 function track(id) {
-  openSheet('<div class="empty">Chargementâ€¦</div>'); if (unsub) unsub();
+  openSheet('<div class="empty">Chargement\u2026</div>'); if (unsub) unsub();
   unsub = onSnapshot(doc(db, 'orders', id), s => {
-    if (!s.exists()) { $('#sh').innerHTML = '<h2>Commande introuvable <button class="x" data-x>âœ•</button></h2><p class="msg">Ce numÃ©ro de suivi n\'existe pas.</p>'; return; }
+    if (!s.exists()) { $('#sh').innerHTML = '<h2>Commande introuvable <button class="x" data-x>\u2715</button></h2><p class="msg">Ce num\u00e9ro de suivi n\'existe pas.</p>'; return; }
     const o = s.data(), i = ST.findIndex(x => x[0] === o.status), canc = o.status === 'cancelled';
-    $('#sh').innerHTML = `<h2>Commande ${esc(o.no)} <button class="x" data-x>âœ•</button></h2>${canc ? '<div class="info" style="background:#E4572E22">Cette commande a Ã©tÃ© annulÃ©e. Contactez la boutique si besoin.</div>' : `<div class="tl">${ST.map((x, k) => `<div class="${k <= i ? 'on' : ''}"><i>${k <= i ? 'âœ“' : k + 1}</i>${x[1]}</div>`).join('')}</div>`}
-    ${(o.items || []).map(l => `<div class="ln"><div class="t"><b>${esc(l.name)}</b><small>${esc(l.unit)} Ã— ${esc(l.qty)}</small></div><b>${fmt(l.price * l.qty)[0]}</b></div>`).join('')}
-    <div class="tot"><span>Total</span><span>${fmt(o.total)[0]}</span></div><p class="pr2">${o.mode === 'delivery' ? 'ðŸšš Livraison : ' + esc(o.addr) : 'ðŸª Retrait en boutique'} Â· ${o.pay === 'momo' ? 'ðŸ“± Mobile Money' : 'ðŸ’µ EspÃ¨ces'}</p>
-    ${cfg.wa ? `<a class="btn gh" style="display:block;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/${esc(cfg.wa)}?text=${encodeURIComponent('Bonjour, au sujet de ma commande ' + o.no)}">ðŸ’¬ Contacter la boutique</a>` : ''}`;
-  }, () => { $('#sh').innerHTML = '<h2>Suivi indisponible <button class="x" data-x>âœ•</button></h2><p class="msg">RÃ©essayez dans un instant.</p>'; });
+    $('#sh').innerHTML = `<h2>Commande ${esc(o.no)} <button class="x" data-x>\u2715</button></h2>${canc ? '<div class="info" style="background:#E4572E22">Cette commande a \u00e9t\u00e9 annul\u00e9e. Contactez la boutique si besoin.</div>' : `<div class="tl">${ST.map((x, k) => `<div class="${k <= i ? 'on' : ''}"><i>${k <= i ? '\u2713' : k + 1}</i>${x[1]}</div>`).join('')}</div>`}
+    ${(o.items || []).map(l => `<div class="ln"><div class="t"><b>${esc(l.name)}</b><small>${esc(l.unit)} \u00d7 ${esc(l.qty)}</small></div><b>${fmt(l.price * l.qty)[0]}</b></div>`).join('')}
+    <div class="tot"><span>Total</span><span>${fmt(o.total)[0]}</span></div><p class="pr2">${o.mode === 'delivery' ? '\ud83d\ude9a Livraison : ' + esc(o.addr) : '\ud83c\udfea Retrait en boutique'} \u00b7 ${o.pay === 'momo' ? '\ud83d\udcf1 Mobile Money \u00e0 la remise' : '\ud83d\udcb5 Esp\u00e8ces \u00e0 la remise'}</p><div class="warn">\u26a0\ufe0f Ne payez rien en ligne : paiement uniquement \u00e0 la r\u00e9ception.</div>
+    ${cfg.wa ? `<a class="btn gh" style="display:block;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/${esc(cfg.wa)}?text=${encodeURIComponent('Bonjour, au sujet de ma commande ' + o.no)}">\ud83d\udcac Contacter la boutique</a>` : ''}`;
+  }, () => { $('#sh').innerHTML = '<h2>Suivi indisponible <button class="x" data-x>\u2715</button></h2><p class="msg">R\u00e9essayez dans un instant.</p>'; });
 }
 function openMine() {
-  const m = myOrders(); openSheet(`<h2>Mes commandes <button class="x" data-x>âœ•</button></h2>${m.length ? m.map(o => `<div class="ln"><div class="t"><b>${esc(o.no)}</b><small>${new Date(o.ts).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</small></div><button class="chip" data-tr="${esc(o.id)}">Suivre</button></div>`).join('') : '<p class="msg">Vous n\'avez pas encore passÃ© de commande depuis cet appareil.</p>'}`);
+  const m = myOrders(); openSheet(`<h2>Mes commandes <button class="x" data-x>\u2715</button></h2>${m.length ? m.map(o => `<div class="ln"><div class="t"><b>${esc(o.no)}</b><small>${new Date(o.ts).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</small></div><button class="chip" data-tr="${esc(o.id)}">Suivre</button></div>`).join('') : '<p class="msg">Vous n\'avez pas encore pass\u00e9 de commande depuis cet appareil.</p>'}`);
   $('#sh').querySelectorAll('[data-tr]').forEach(b => b.onclick = () => track(b.dataset.tr));
 }
 load();
