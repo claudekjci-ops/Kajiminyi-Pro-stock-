@@ -877,7 +877,7 @@ function shopDoc(p) {
 }
 function shopCfg() {
   const s = S.settings, ids = new Set(S.products.filter(shopVisible).map(p => p.cat));
-  return { open: !!s.shopOn, name: s.shop || 'Boutique', logo: s.logo || '', addr: s.addr || '', phone: s.phone || '', wa: waPh2(s.shopWa || s.phone || ''), momo: s.shopMomo || '', deliv: s.shopDeliv || '', msg: s.shopMsg || '', rate: s.rate || 1, cur: s.mainCur === 'USD' ? 'USD' : 'CDF', cats: S.categories.filter(c => ids.has(c.id)).map(c => ({ id: c.id, name: c.name })) };
+  return { open: !!s.shopOn, name: s.shop || 'Boutique', logo: s.logo || '', addr: s.addr || '', phone: s.phone || '', wa: waPh2(s.shopWa || s.phone || ''), momo: s.shopMomo || '', mark: Math.max(0, Math.min(100, +s.shopMark || 0)), deliv: s.shopDeliv || '', msg: s.shopMsg || '', rate: s.rate || 1, cur: s.mainCur === 'USD' ? 'USD' : 'CDF', cats: S.categories.filter(c => ids.has(c.id)).map(c => ({ id: c.id, name: c.name })) };
 }
 let shopBusy = false, shopT = null;
 const SHOPKEY = 'ksp_shopsync';
@@ -974,7 +974,7 @@ A.shoplink = () => {
 document.addEventListener('submit', e => {
   if (e.target.id !== 'shf') return; e.preventDefault(); if (!isAdmin()) return;
   const v = Object.fromEntries(new FormData(e.target));
-  const b = batch(); b.merge('meta', 'settings', { shopOn: !!v.shopOn, shopWa: (v.shopWa || '').trim(), shopMomo: (v.shopMomo || '').trim(), shopDeliv: (v.shopDeliv || '').trim(), shopMsg: (v.shopMsg || '').trim() });
+  const b = batch(); b.merge('meta', 'settings', { shopOn: !!v.shopOn, shopWa: (v.shopWa || '').trim(), shopMomo: (v.shopMomo || '').trim(), shopMark: Math.max(0, Math.min(100, +v.shopMark || 0)), shopDeliv: (v.shopDeliv || '').trim(), shopMsg: (v.shopMsg || '').trim() });
   jr(b, 'Paramètres', 'Boutique en ligne ' + (v.shopOn ? 'ouverte' : 'fermée') + ' (par ' + who() + ')'); b.commit().catch(() => {}); toast('Boutique enregistrée');
   setTimeout(async () => { const n = await shopSync(true); if (n !== false) toast('Catalogue publié'); }, 1500);
 });
@@ -4164,7 +4164,8 @@ views.settings = el => {
   if (tab === 'shop' && adm) body = `<form class="card frm" id="shf"><h3>🛍️ Boutique en ligne</h3><p class="muted sm">Vos clients commandent depuis un simple lien. Les commandes arrivent dans « Commandes en ligne », avec une sonnerie et une alerte Telegram. Le prix d'achat et le stock exact ne sont jamais publiés.</p>
     <label class="chk"><input type="checkbox" name="shopOn" ${s.shopOn ? 'checked' : ''}> Boutique ouverte aux clients</label>
     ${fld('Numéro WhatsApp de la boutique', 'shopWa', s.shopWa || s.phone || '', 'text', 'placeholder="Ex. 0991234567"')}
-    <label>Paiement Mobile Money (affiché aux clients)<textarea name="shopMomo" rows="2" placeholder="Airtel Money 099… (Nom) · M-Pesa 081… · Orange Money 089…">${esc(s.shopMomo || '')}</textarea></label>
+    <label>Numéros Mobile Money pour payer à la remise (affichés aux clients)<textarea name="shopMomo" rows="2" placeholder="Airtel Money 099… (Nom) · M-Pesa 081… · Orange Money 089…">${esc(s.shopMomo || '')}</textarea></label>
+    ${fld('Prix barré : majoration affichée (%), 0 = aucun', 'shopMark', s.shopMark || 0, 'number', 'min="0" max="100" step="1"')}<p class="muted sm">Sur la boutique, un prix plus élevé est affiché barré à côté du vrai prix (celui de l'application), avec une étiquette de réduction. Exemple : 20 → un article à 10 $ s'affiche « <s>12 $</s> 10 $ ». Les clients paient toujours le prix réel. Le paiement se fait uniquement à la réception : la boutique le rappelle partout aux clients.</p>
     <label>Livraison (zones, frais, délais)<textarea name="shopDeliv" rows="2" placeholder="Livraison dans la commune : 2 $ · Gratuite dès 50 $">${esc(s.shopDeliv || '')}</textarea></label>
     <label>Message d'accueil<textarea name="shopMsg" rows="2" placeholder="Bienvenue ! Commandez, nous vous rappelons.">${esc(s.shopMsg || '')}</textarea></label>
     <div class="row sp"><small class="muted">Lien : <b>${esc(shopUrl())}</b></small><button type="button" class="btn ghost sm" data-act="shopcopy">Copier</button></div><button class="btn">Enregistrer et publier</button></form>`;
