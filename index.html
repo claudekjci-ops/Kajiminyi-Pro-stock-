@@ -373,6 +373,9 @@ body:has(.wa) .fab-bot{display:none!important}
 .chmenu{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:6px 8px;padding:12px;background:var(--wapill,#fff);border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,.15)}.chmenu[hidden],.chemo[hidden]{display:none}.chmenu button{display:flex;flex-direction:column;align-items:center;gap:4px;background:rgba(0,0,0,.04);border:0;border-radius:12px;padding:10px 4px;font-size:.78rem;color:var(--tx)}.chmenu span{font-size:1.5rem}
 .chemo{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;margin:6px 8px;padding:8px;background:var(--wapill,#fff);border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,.15);max-height:150px;overflow:auto}.chemo button{background:none;border:0;font-size:1.4rem;padding:4px}
 [data-theme=dark] .wa{--wabg:#0b141a;--wain:#202c33;--waout:#005c4b;--wapill:#202c33;--wach:#182229}[data-theme=dark] .wlist{background-image:radial-gradient(rgba(255,255,255,.04) 1.2px,transparent 1.3px)}[data-theme=dark] .wb a{color:#53bdeb}[data-theme=dark] .wb .qt{background:rgba(255,255,255,.07)}
+
+.ord{margin-bottom:10px}.ord .ordl{margin:8px 0;border-top:1px dashed var(--bd);padding-top:6px}.ord .mi{display:flex;justify-content:space-between;gap:8px;padding:3px 0}
+.warnbox{border-left:4px solid #E4572E}
 </style>
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -414,15 +417,15 @@ const DEF = {
 const S = {
   user: null, me: null, settings: JSON.parse(JSON.stringify(DEF)),
   products: [], categories: [], sales: [], purchases: [], expenses: [], suppliers: [], clients: [], inventories: [],
-  cashops: [], sessions: [], users: [], journal: [], justifs: [], calcs: [], events: [], messages: [], polls: [], tickets: [],
+  cashops: [], sessions: [], users: [], journal: [], justifs: [], calcs: [], events: [], messages: [], polls: [], tickets: [], orders: [],
   errLog: [], snapErr: 0, lastSync: 0
 };
-const COLS = ['products', 'categories', 'sales', 'purchases', 'expenses', 'suppliers', 'clients', 'inventories', 'cashops', 'sessions', 'users', 'journal', 'justifs', 'calcs', 'events', 'messages', 'polls', 'tickets'];
-const LIMITS = { journal: 800, messages: 300 };
+const COLS = ['products', 'categories', 'sales', 'purchases', 'expenses', 'suppliers', 'clients', 'inventories', 'cashops', 'sessions', 'users', 'journal', 'justifs', 'calcs', 'events', 'messages', 'polls', 'tickets', 'orders'];
+const LIMITS = { journal: 800, messages: 300, orders: 300 };
 
 /* ---------- modules & rôles ---------- */
 const MODULES = {
-  dashboard: 'Tableau de bord', sales: 'Ventes', products: 'Produits', categories: 'Catégories', purchases: 'Entrées de stock',
+  dashboard: 'Tableau de bord', sales: 'Ventes', orders: 'Commandes', products: 'Produits', categories: 'Catégories', purchases: 'Entrées de stock',
   inventory: 'Inventaire', cash: 'Caisse', expenses: 'Dépenses', partners: 'Clients & Fournisseurs', journal: 'Historique',
   justifs: 'Justifications', reports: 'Rapports', boss: 'Tableau du patron', lots: 'Lots & péremption', depots: 'Dépôts & transferts', labels: 'Étiquettes code-barres', health: 'Business Health', usage: 'Santé & usage', calc: 'Smart Calculator', calendar: 'Calendrier',
   notifs: 'Notifications', chat: 'Chat & sondages', academy: 'Formation & brevets', help: "Centre d'aide", legal: 'Conditions & confidentialité', users: 'Utilisateurs', settings: 'Paramètres'
@@ -432,14 +435,14 @@ const COMMON = ['calc', 'calendar', 'notifs', 'chat', 'academy', 'help', 'legal'
 const ROLE_PERMS = {
   admin: ALL,
   gerant: ALL.filter(m => m !== 'users'),
-  caissier: ['sales', 'cash', 'partners', ...COMMON],
+  caissier: ['sales', 'orders', 'cash', 'partners', ...COMMON],
   magasinier: ['products', 'categories', 'purchases', 'inventory', 'lots', 'depots', 'labels', ...COMMON],
   comptable: ['dashboard', 'expenses', 'cash', 'partners', 'reports', 'boss', 'journal', 'health', ...COMMON],
   observateur: ['dashboard', 'reports', 'boss', 'journal', 'health', 'calc', 'calendar', 'notifs', 'chat', 'academy', 'help', 'legal']
 };
 const ROLES = [['admin', 'Administrateur'], ['gerant', 'Gérant'], ['caissier', 'Caissier'], ['magasinier', 'Magasinier'], ['comptable', 'Comptable'], ['observateur', 'Observateur']];
 const roleName = r => ROLES.find(x => x[0] === r)?.[1] || r;
-const NEWMODS = ['boss', 'lots', 'depots', 'labels', 'usage', 'justifs', 'health', 'calc', 'calendar', 'notifs', 'chat', 'academy', 'help', 'legal'];
+const NEWMODS = ['orders', 'boss', 'lots', 'depots', 'labels', 'usage', 'justifs', 'health', 'calc', 'calendar', 'notifs', 'chat', 'academy', 'help', 'legal'];
 const PERMANENT = ['settings', 'users', 'help', 'legal'];
 const can = m => {
   if (!S.me) return false;
@@ -614,7 +617,7 @@ const IC = {
 };
 IC.book = '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>';
 const ic = (n, s = 20) => `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[n] || ''}</svg>`;
-const NAV_IC = { dashboard: 'home', sales: 'cart', products: 'box', categories: 'tag', purchases: 'truck', inventory: 'clip', cash: 'wallet', expenses: 'receipt', partners: 'users', journal: 'clock', justifs: 'chat', boss: 'chart', lots: 'clock', depots: 'truck', labels: 'tag', reports: 'chart', health: 'heart', calc: 'calc', calendar: 'cal', notifs: 'bell', chat: 'chat', academy: 'book', help: 'help', legal: 'shield', users: 'users', settings: 'settings' };
+const NAV_IC = { dashboard: 'home', sales: 'cart', products: 'box', categories: 'tag', purchases: 'truck', inventory: 'clip', cash: 'wallet', expenses: 'receipt', partners: 'users', journal: 'clock', justifs: 'chat', boss: 'chart', lots: 'clock', depots: 'truck', orders: 'cart', labels: 'tag', reports: 'chart', health: 'heart', calc: 'calc', calendar: 'cal', notifs: 'bell', chat: 'chat', academy: 'book', help: 'help', legal: 'shield', users: 'users', settings: 'settings' };
 
 /* ---------- formulaires ---------- */
 const fld = (label, name, val = '', type = 'text', extra = '') =>
@@ -853,6 +856,133 @@ A.langedit = d => {
   });
 };
 
+// ======================= BOUTIQUE EN LIGNE (v13) =======================
+const SHOP_ST = { new: ['Nouvelle', 'bad'], confirmed: ['Confirmée', 'warn'], ready: ['Prête', 'warn'], done: ['Terminée', ''], cancelled: ['Annulée', 'gray'] };
+const shopUrl = () => location.href.replace(/[#?].*$/, '').replace(/[^/]*$/, '') + 'boutique.html';
+const shopVisible = p => sellable(p) && !(S.settings.shopHide || []).includes(p.id);
+const hsh = str => { let h = 5381; for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0; return String(h) + ':' + str.length; };
+const thumbCache = new Map();
+function thumb(src) {
+  if (!src) return Promise.resolve('');
+  if (thumbCache.has(src)) return Promise.resolve(thumbCache.get(src));
+  return new Promise(res => {
+    const im = new Image();
+    im.onload = () => { try { const k = Math.min(1, 160 / Math.max(im.width, im.height)), c = document.createElement('canvas'); c.width = Math.max(1, Math.round(im.width * k)); c.height = Math.max(1, Math.round(im.height * k)); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); const o = c.toDataURL('image/jpeg', 0.6); thumbCache.set(src, o); res(o); } catch { res(src.length < 30000 ? src : ''); } };
+    im.onerror = () => res(''); im.src = src;
+  });
+}
+function shopDoc(p) {
+  const units = allUnits(p).map(u => ({ n: u.name, f: u.factor, p: r00(unitPrice(p, u)), lim: Math.max(0, Math.min(50, Math.floor((p.qty || 0) / u.factor + 1e-9))) }));
+  return { id: p.id, name: p.name, cat: p.cat || '', brand: p.brand || '', unit: p.unit, units, inStock: units.some(u => u.lim > 0) };
+}
+function shopCfg() {
+  const s = S.settings, ids = new Set(S.products.filter(shopVisible).map(p => p.cat));
+  return { open: !!s.shopOn, name: s.shop || 'Boutique', logo: s.logo || '', addr: s.addr || '', phone: s.phone || '', wa: waPh2(s.shopWa || s.phone || ''), momo: s.shopMomo || '', deliv: s.shopDeliv || '', msg: s.shopMsg || '', rate: s.rate || 1, cur: s.mainCur === 'USD' ? 'USD' : 'CDF', cats: S.categories.filter(c => ids.has(c.id)).map(c => ({ id: c.id, name: c.name })) };
+}
+let shopBusy = false, shopT = null;
+const SHOPKEY = 'ksp_shopsync';
+function shopSched() { clearTimeout(shopT); shopT = setTimeout(() => shopSync(false), 8000); }
+async function shopSync(force) {
+  if (shopBusy || !isMgr() || !navigator.onLine || !S.lastSync) return false;
+  let known = {}; try { known = JSON.parse(localStorage.getItem(SHOPKEY) || '{}'); } catch { known = {}; }
+  if (!S.settings.shopOn && !force && !Object.keys(known).length) return false;
+  shopBusy = true;
+  try {
+    if (force) { const snap = await F.getDocs(F.collection(F.db, 'shop')); known = {}; snap.docs.forEach(d => { known[d.id] = ''; }); }
+    const want = {};
+    if (S.settings.shopOn) for (const p of S.products) { if (!shopVisible(p)) continue; const d = shopDoc(p); d.photo = await thumb(p.photo); want[p.id] = d; }
+    want._cfg = shopCfg();
+    const ops = [];
+    for (const id in want) { const h = hsh(JSON.stringify(want[id])); if (known[id] !== h) ops.push({ id, data: { ...want[id], ts: Date.now() }, h }); }
+    for (const id in known) if (!(id in want)) ops.push({ id, del: true });
+    for (let i = 0; i < ops.length; i += 400) {
+      const b = F.writeBatch(F.db);
+      ops.slice(i, i + 400).forEach(o => o.del ? b.delete(F.doc(F.db, 'shop', o.id)) : b.set(F.doc(F.db, 'shop', o.id), o.data));
+      await b.commit();
+    }
+    const nk = {}; for (const id in want) nk[id] = hsh(JSON.stringify(want[id]));
+    try { localStorage.setItem(SHOPKEY, JSON.stringify(nk)); localStorage.setItem(SHOPKEY + '_t', String(Date.now())); } catch { /* */ }
+    return ops.length;
+  } catch (e) { try { logErr('Boutique : ' + (e.code || e.message)); } catch { /* */ } return false; }
+  finally { shopBusy = false; }
+}
+// Nouvelle commande en ligne : une seule application avertit Telegram (marquage tgDone)
+const ordSeen = new Set();
+const ordLines = o => (o.items || []).map(i => `• ${i.qty} × ${i.name}${i.unit ? ' (' + i.unit + ')' : ''}`).join('\n');
+function ordWatch() {
+  if (!S.lastSync || !['admin', 'gerant'].includes(S.me?.role)) return;
+  S.orders.filter(o => o.status === 'new' && !o.tgDone && !ordSeen.has(o.id) && Date.now() - o.ts < 864e5).forEach(o => {
+    ordSeen.add(o.id);
+    F.updateDoc(F.doc(F.db, 'orders', o.id), { tgDone: true }).then(() => tgNotify('order', `🛍️ NOUVELLE COMMANDE EN LIGNE ${o.no}\n👤 ${o.name} · ${o.phone}\n${o.mode === 'delivery' ? '🚚 Livraison : ' + (o.addr || '') : '🏪 Retrait en boutique'}\n${ordLines(o)}\n💵 ${fmAt(o.total, o.rate)}`, { sys: true })).catch(() => {});
+  });
+}
+const ordLink = (o, txt) => `https://wa.me/${waPh2(o.phone)}?text=${encodeURIComponent(txt)}`;
+let otab = 'new';
+views.orders = el => {
+  const L = S.orders.slice().sort((a, b) => b.ts - a.ts), cnt = { new: L.filter(o => o.status === 'new').length, run: L.filter(o => ['confirmed', 'ready'].includes(o.status)).length, done: L.filter(o => ['done', 'cancelled'].includes(o.status)).length };
+  const tabs = `<div class="chips">${[['new', 'Nouvelles'], ['run', 'En cours'], ['done', 'Terminées'], ['cat', 'Catalogue en ligne']].map(([k, t]) => `<button class="chip ${otab === k ? 'on' : ''}" data-act="ordtab" data-k="${k}">${t}${cnt[k] != null ? ' (' + cnt[k] + ')' : ''}</button>`).join('')}</div>`;
+  const on = !!S.settings.shopOn;
+  const head = `<div class="card ${on ? '' : 'warnbox'}"><div class="row sp"><div><b>${on ? '🟢 Boutique en ligne ouverte' : '🔴 Boutique en ligne fermée'}</b><br><small class="muted">${on ? esc(shopUrl()) : "Activez-la dans Paramètres → Boutique en ligne."}</small></div><div class="row">${on ? `<button class="btn sm" data-act="shoplink">Lien &amp; QR</button>` : ''}${isAdmin() ? `<button class="btn ghost sm" data-act="gotoshop">Réglages</button>` : ''}</div></div></div>`;
+  let body = '';
+  if (otab === 'cat') {
+    const hide = new Set(S.settings.shopHide || []), t = +localStorage.getItem(SHOPKEY + '_t') || 0;
+    body = `<div class="card"><div class="row sp"><div><b>Produits visibles sur la boutique</b><br><small class="muted">Dernière mise à jour du catalogue : ${t ? fmtDate(t) : 'jamais'}. Les prix, photos et disponibilités se mettent à jour tout seuls.</small></div><button class="btn sm" data-act="shoppub">Publier maintenant</button></div></div>
+    <div class="llist">${S.products.slice().sort((a, b) => a.name.localeCompare(b.name)).map(p => { const vis = sellable(p) && !hide.has(p.id), why = p.suspended ? 'Vente suspendue' : expState(p) === 'expired' ? 'Expiré' : hide.has(p.id) ? 'Masqué' : (p.qty > 0 ? 'En ligne' : 'En ligne · épuisé');
+      return `<div class="lrow">${p.photo ? `<img class="th" src="${p.photo}" alt="">` : `<div class="ph-ic th">${esc(p.name[0])}</div>`}<div class="jm"><b>${esc(p.name)}</b><small>${esc(catName(p.cat))} · ${usd(unitPrice(p, allUnits(p)[0]))}</small></div><div class="jr"><span class="badge ${vis ? '' : 'gray'}">${why}</span></div><div class="ac"><label class="chk"><input type="checkbox" data-act="shopvis" data-id="${p.id}" ${hide.has(p.id) ? '' : 'checked'} ${p.suspended || expState(p) === 'expired' ? 'disabled' : ''}> Visible</label></div></div>`; }).join('') || '<p class="muted">Aucun produit.</p>'}</div>`;
+  } else {
+    const rows = L.filter(o => otab === 'new' ? o.status === 'new' : otab === 'run' ? ['confirmed', 'ready'].includes(o.status) : ['done', 'cancelled'].includes(o.status));
+    body = rows.map(o => { const st = SHOP_ST[o.status] || ['?', 'gray'], tel = String(o.phone || '').replace(/[^\d+]/g, '');
+      const act = o.status === 'new' ? `<button class="btn sm" data-act="ordst" data-id="${o.id}" data-st="confirmed">Confirmer</button><button class="btn ghost sm" data-act="ordsale" data-id="${o.id}">Encaisser (vente)</button><button class="btn ghost sm del" data-act="ordst" data-id="${o.id}" data-st="cancelled">Refuser</button>`
+        : o.status === 'confirmed' ? `<button class="btn sm" data-act="ordst" data-id="${o.id}" data-st="ready">Prête</button><button class="btn ghost sm" data-act="ordsale" data-id="${o.id}">Encaisser (vente)</button><button class="btn ghost sm del" data-act="ordst" data-id="${o.id}" data-st="cancelled">Annuler</button>`
+        : o.status === 'ready' ? `<button class="btn sm" data-act="ordst" data-id="${o.id}" data-st="done">${o.mode === 'delivery' ? 'Livrée' : 'Retirée'}</button><button class="btn ghost sm" data-act="ordsale" data-id="${o.id}">Encaisser (vente)</button><button class="btn ghost sm del" data-act="ordst" data-id="${o.id}" data-st="cancelled">Annuler</button>` : '';
+      return `<div class="card ord" data-oid="${o.id}"><div class="row sp"><b>${esc(o.no)}</b><span class="badge ${st[1]}">${st[0]}</span></div>
+        <small class="muted">${fmtDate(o.ts)} · ${o.mode === 'delivery' ? '🚚 Livraison' : '🏪 Retrait en boutique'} · ${o.pay === 'momo' ? '📱 Mobile Money' : '💵 Espèces'}</small>
+        <p style="margin:8px 0 2px"><b>${esc(o.name)}</b> · ${esc(o.phone)}</p>${o.addr ? `<small>📍 ${esc(o.addr)}</small><br>` : ''}
+        <div class="ordl">${(o.items || []).map(i => `<div class="mi"><span>${esc(i.qty)} × ${esc(i.name)}${i.unit ? ' <small class="muted">(' + esc(i.unit) + ')</small>' : ''}</span><b>${fmAt(i.price * i.qty, o.rate)}</b></div>`).join('')}</div>
+        <div class="mi"><b>Total</b><b>${fmAt(o.total, o.rate)}</b></div>${o.note ? `<p class="muted sm">📝 ${esc(o.note)}</p>` : ''}
+        <div class="row wrap" style="margin-top:8px">${act}<a class="btn ghost sm" href="tel:${tel}">📞 Appeler</a><a class="btn ghost sm" target="_blank" rel="noopener" href="${ordLink(o, `Bonjour ${o.name}, c'est ${S.settings.shop || 'la boutique'} au sujet de votre commande ${o.no}.`)}">WhatsApp</a></div></div>`; }).join('') || `<div class="card"><p class="muted">Aucune commande ${otab === 'new' ? 'nouvelle' : otab === 'run' ? 'en cours' : 'terminée'}.</p></div>`;
+  }
+  el.innerHTML = page('Commandes en ligne', '', head + tabs + body);
+};
+A.ordtab = d => { otab = d.k; views.orders($('#view')); };
+A.ordst = async d => {
+  const o = S.orders.find(x => x.id === d.id); if (!o) return; const nm = SHOP_ST[d.st][0];
+  if (d.st === 'cancelled' && !(await confirmBox(`Refuser / annuler la commande <b>${esc(o.no)}</b> de ${esc(o.name)} ?`, 'Oui, annuler'))) return;
+  const b = batch(); b.upd('orders', o.id, { status: d.st, stTs: Date.now(), stBy: who() }); jr(b, 'Commande', `Commande en ligne ${o.no} : ${nm} (${o.name})`, o.total);
+  b.commit(); toast('Commande ' + o.no + ' : ' + nm.toLowerCase());
+};
+A.ordsale = d => {
+  const o = S.orders.find(x => x.id === d.id); if (!o) return; const items = [], miss = [];
+  (o.items || []).forEach(i => { const p = S.products.find(x => x.id === i.pid); if (!p) return miss.push(i.name); const u = allUnits(p).find(x => x.name === i.unit) || allUnits(p)[0]; items.push({ pid: p.id, unit: u.name, qty: i.qty }); });
+  if (!items.length) return toast('Ces produits n\'existent plus', 'err');
+  A.cartfill(items); if (o.status === 'new') { const b = batch(); b.upd('orders', o.id, { status: 'confirmed', stTs: Date.now(), stBy: who() }); jr(b, 'Commande', `Commande en ligne ${o.no} : Confirmée (${o.name})`, o.total); b.commit(); }
+  toast(miss.length ? 'Panier rempli (introuvable : ' + miss.join(', ') + ')' : 'Panier rempli : encaissez, puis marquez la commande Livrée', miss.length ? 'err' : undefined); location.hash = '#/sales';
+};
+A.shopvis = d => {
+  const h = new Set(S.settings.shopHide || []); if (h.has(d.id)) h.delete(d.id); else h.add(d.id);
+  S.settings.shopHide = [...h]; const bb = batch(); bb.merge('meta', 'settings', { shopHide: [...h] }); bb.commit();
+  setTimeout(() => { if (S.route === 'orders') views.orders($('#view')); }, 120); setTimeout(() => shopSync(false), 1200);
+};
+A.shoppub = async () => { toast('Publication du catalogue…'); const n = await shopSync(true); if (n === false) toast('Publication impossible (connexion ? boutique activée ?)', 'err'); else { toast('Catalogue publié (' + n + ' mise(s) à jour)'); views.orders($('#view')); } };
+A.shoplink = () => {
+  const u = shopUrl(), w = modal('Lien de votre boutique', `<p class="muted sm">Partagez ce lien à vos clients (WhatsApp, Facebook, carte de visite, affiche).</p><input readonly value="${esc(u)}" style="width:100%" onclick="this.select()"><div id="shqr" style="display:grid;place-items:center;margin:14px 0"></div>
+    <div class="row wrap"><button class="btn" id="shcp">Copier le lien</button><a class="btn ghost" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent((S.settings.shop || 'Notre boutique') + ' — commandez en ligne : ' + u)}">Partager sur WhatsApp</a><a class="btn ghost" target="_blank" rel="noopener" href="${esc(u)}">Ouvrir</a></div>`);
+  w.querySelector('#shcp').onclick = () => { navigator.clipboard?.writeText(u).then(() => toast('Lien copié'), () => toast(u)); };
+  try { if (window.QRCode) new QRCode(w.querySelector('#shqr'), { text: u, width: 180, height: 180 }); } catch { /* */ }
+};
+// formulaire réglages (onglet Paramètres → Boutique en ligne)
+document.addEventListener('submit', e => {
+  if (e.target.id !== 'shf') return; e.preventDefault(); if (!isAdmin()) return;
+  const v = Object.fromEntries(new FormData(e.target));
+  const b = batch(); b.merge('meta', 'settings', { shopOn: !!v.shopOn, shopWa: (v.shopWa || '').trim(), shopMomo: (v.shopMomo || '').trim(), shopDeliv: (v.shopDeliv || '').trim(), shopMsg: (v.shopMsg || '').trim() });
+  jr(b, 'Paramètres', 'Boutique en ligne ' + (v.shopOn ? 'ouverte' : 'fermée') + ' (par ' + who() + ')'); b.commit().catch(() => {}); toast('Boutique enregistrée');
+  setTimeout(async () => { const n = await shopSync(true); if (n !== false) toast('Catalogue publié'); }, 1500);
+});
+A.shopcopy = () => { navigator.clipboard?.writeText(shopUrl()).then(() => toast('Lien copié'), () => toast(shopUrl())); };
+
+window.__shopTick = () => { ordWatch(); try { if (S.settings.shopOn || localStorage.getItem(SHOPKEY)) shopSched(); } catch { /* */ } };
+window.__shopSync = shopSync;
+
 // ======================= LOTS 2-4 : écrans =======================
 const zkpi = (l, v, c = '') => `<div class="kpi ${c}"><small>${l}</small><b>${v}</b></div>`;
 const zpct = (a, b) => b ? ((a - b) / Math.abs(b) * 100) : (a ? 100 : 0);
@@ -1042,15 +1172,18 @@ body:has(.wa) .fab-bot{display:none!important}
 .chmenu{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:6px 8px;padding:12px;background:var(--wapill,#fff);border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,.15)}.chmenu[hidden],.chemo[hidden]{display:none}.chmenu button{display:flex;flex-direction:column;align-items:center;gap:4px;background:rgba(0,0,0,.04);border:0;border-radius:12px;padding:10px 4px;font-size:.78rem;color:var(--tx)}.chmenu span{font-size:1.5rem}
 .chemo{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;margin:6px 8px;padding:8px;background:var(--wapill,#fff);border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,.15);max-height:150px;overflow:auto}.chemo button{background:none;border:0;font-size:1.4rem;padding:4px}
 [data-theme=dark] .wa{--wabg:#0b141a;--wain:#202c33;--waout:#005c4b;--wapill:#202c33;--wach:#182229}[data-theme=dark] .wlist{background-image:radial-gradient(rgba(255,255,255,.04) 1.2px,transparent 1.3px)}[data-theme=dark] .wb a{color:#53bdeb}[data-theme=dark] .wb .qt{background:rgba(255,255,255,.07)}
+
+.ord{margin-bottom:10px}.ord .ordl{margin:8px 0;border-top:1px dashed var(--bd);padding-top:6px}.ord .mi{display:flex;justify-content:space-between;gap:8px;padding:3px 0}
+.warnbox{border-left:4px solid #E4572E}
 </style><div class="g">${L.map(p => `<div class="l"><div class="n">${esc(p.name)}</div><div class="p">${usd(p.sell)}</div>${barSvg(p.barcode)}</div>`).join('')}</div>`);
 };
 
 /* ================= ALERTES TELEGRAM ================= */
 const tgOn = () => { const s = S.settings; return !!(s.tgToken && s.tgChat && s.tgOff !== true); };
-const TG_EV = [['big', '💰 Grosse vente'], ['vente', '🛒 Toutes les ventes'], ['cancel', '❌ Annulations de vente'], ['ret', '↩️ Retours / remboursements'], ['stock', '🚨 Rupture / stock faible'], ['purchase', '📦 Entrées de stock'], ['expense', '💸 Dépenses'], ['cash', '🏦 Ouverture / clôture de caisse'], ['ecart', '🧾 Écarts de caisse'], ['inv', '📋 Inventaires'], ['product', '🏷️ Produits, prix, lots, transferts'], ['partner', '👥 Clients et fournisseurs'], ['user', '🔑 Utilisateurs et accès'], ['sys', '⚙️ Paramètres, taux, sauvegardes'], ['just', '📝 Justifications'], ['msg', '💬 Messages du chat'], ['login', '🔓 Connexions (très fréquent)']];
+const TG_EV = [['big', '💰 Grosse vente'], ['vente', '🛒 Toutes les ventes'], ['cancel', '❌ Annulations de vente'], ['ret', '↩️ Retours / remboursements'], ['stock', '🚨 Rupture / stock faible'], ['purchase', '📦 Entrées de stock'], ['expense', '💸 Dépenses'], ['cash', '🏦 Ouverture / clôture de caisse'], ['ecart', '🧾 Écarts de caisse'], ['inv', '📋 Inventaires'], ['product', '🏷️ Produits, prix, lots, transferts'], ['partner', '👥 Clients et fournisseurs'], ['user', '🔑 Utilisateurs et accès'], ['sys', '⚙️ Paramètres, taux, sauvegardes'], ['just', '📝 Justifications'], ['order', '🛍️ Commandes en ligne'], ['msg', '💬 Messages du chat'], ['login', '🔓 Connexions (très fréquent)']];
 const tgEvOn = k => { const e = S.settings.tgEv || {}; if (k === 'login') return e.login === true; if (k === 'big') return (e.big ?? e.sale) !== false; return e[k] !== false; };
 const tgEv = k => tgEvOn(k);
-const TG_MAP = { 'Vente': ['vente', '🛒'], 'Entrée stock': ['purchase', '📦'], 'Dépense': ['expense', '💸'], 'Ouverture caisse': ['cash', '🏦'], 'Clôture caisse': ['cash', '🏦'], 'Inventaire': ['inv', '📋'], 'Produit créé': ['product', '🆕'], 'Modification produit': ['product', '✏️'], 'Produit supprimé': ['product', '🗑️'], 'Code-barres': ['product', '🏷️'], 'Lot': ['product', '🧪'], 'Transfert': ['product', '🔁'], 'Catégorie': ['product', '📂'], 'Client': ['partner', '👤'], 'Taux fournisseur': ['partner', '🏭'], 'Utilisateur': ['user', '🔑'], 'CGU acceptées': ['user', '📜'], 'Connexion': ['login', '🔓'], 'Paramètres': ['sys', '⚙️'], 'Modification': ['sys', '✏️'], 'Taux de change': ['sys', '💱'], 'Sauvegarde': ['sys', '💾'], 'Restauration': ['sys', '♻️'], 'Données effacées': ['sys', '⚠️'], 'Justification': ['just', '📝'] };
+const TG_MAP = { 'Vente': ['vente', '🛒'], 'Entrée stock': ['purchase', '📦'], 'Dépense': ['expense', '💸'], 'Ouverture caisse': ['cash', '🏦'], 'Clôture caisse': ['cash', '🏦'], 'Inventaire': ['inv', '📋'], 'Produit créé': ['product', '🆕'], 'Modification produit': ['product', '✏️'], 'Produit supprimé': ['product', '🗑️'], 'Code-barres': ['product', '🏷️'], 'Lot': ['product', '🧪'], 'Transfert': ['product', '🔁'], 'Catégorie': ['product', '📂'], 'Client': ['partner', '👤'], 'Taux fournisseur': ['partner', '🏭'], 'Utilisateur': ['user', '🔑'], 'CGU acceptées': ['user', '📜'], 'Connexion': ['login', '🔓'], 'Paramètres': ['sys', '⚙️'], 'Modification': ['sys', '✏️'], 'Taux de change': ['sys', '💱'], 'Sauvegarde': ['sys', '💾'], 'Restauration': ['sys', '♻️'], 'Données effacées': ['sys', '⚠️'], 'Justification': ['just', '📝'], 'Commande': ['order', '🛍️'] };
 function tgJournal(x) {
   if (!tgOn()) return; const m = TG_MAP[x.type]; if (!m || !tgEv(m[0])) return; if (S.settings.tgNoSelf && S.me?.role === 'admin') return;
   let head = m[1] + ' ' + x.type; const big = num(S.settings.tgBig) || 100;
@@ -1064,8 +1197,8 @@ async function tgPost(text, token = S.settings.tgToken, chat = S.settings.tgChat
 const tgQ = () => { try { return JSON.parse(localStorage.getItem('ksp_tgq') || '[]'); } catch { return []; } };
 const tgQset = q => { try { localStorage.setItem('ksp_tgq', JSON.stringify(q.slice(-30))); } catch { /* */ } };
 async function tgFlush() { if (!tgOn() || !navigator.onLine) return; let q = tgQ(); if (!q.length) return; const left = []; for (const m of q) { if (Date.now() - m.t > 864e5) continue; try { await tgPost(m.x); } catch { left.push(m); } } tgQset(left); }
-function tgNotify(kind, text) {
-  try { if (!tgOn() || !tgEv(kind)) return; const full = `🏪 ${S.settings.shop || 'KAJIMINYI'}\n${text}\n👤 ${who()} · ${fmtDate(Date.now())}`; if (S.settings.tgNoSelf && S.me?.role === 'admin') return;
+function tgNotify(kind, text, opt = {}) {
+  try { if (!tgOn() || !tgEv(kind)) return; const full = opt.sys ? `🏪 ${S.settings.shop || 'KAJIMINYI'}\n${text}\n🕒 ${fmtDate(Date.now())}` : `🏪 ${S.settings.shop || 'KAJIMINYI'}\n${text}\n👤 ${who()} · ${fmtDate(Date.now())}`; if (!opt.sys && S.settings.tgNoSelf && S.me?.role === 'admin') return;
     tgPost(full).catch(() => { const q = tgQ(); q.push({ t: Date.now(), x: full }); tgQset(q); }); } catch { /* jamais bloquant */ }
 }
 window.addEventListener('online', () => setTimeout(tgFlush, 1500)); setTimeout(tgFlush, 12000);
@@ -1175,6 +1308,7 @@ function alertsList() {
     else if (st === 'faible') add(2, 'Stock', p.name, 'Stock faible : ' + fmtQty(p) + ' (minimum ' + p.min + ' ' + p.unit + ')', '#/purchases');
     if (p.suspended) add(1, 'Vente', p.name, 'Vente suspendue', '#/products');
   });
+  if (can('orders')) S.orders.filter(o => o.status === 'new').forEach(o => add(3, 'Commande', o.no + ' · ' + o.name, 'Nouvelle commande en ligne : ' + fmAt(o.total, o.rate), '#/orders'));
   S.clients.filter(c => (c.debt || 0) > 0.004).forEach(c => {
     const u = unsettledClient(c).filter(x => x.due).sort((a, b) => a.due.localeCompare(b.due))[0];
     if (u && u.due < today) add(3, 'Crédit', c.name, 'Crédit en retard depuis le ' + u.due + ' — reste ' + usd(u.left), '#/partners');
@@ -1627,6 +1761,7 @@ A.addcart = d => {
   views.sales($('#view'));
 };
 A.opencart = () => openCart();
+A.cartfill = items => { cart = items.map(x => ({ ...x })); ck = freshCk(); stab = 'new'; };
 // code scanné ou saisi : produit trouvé (formats normalisés) → panier ; code d'emballage proche → confirmation ; inconnu → association / création rapide
 function addByCode(code) {
   const p = findByCode(code);
@@ -3996,7 +4131,7 @@ A.assistant = () => {
 // Paramètres v2
 
 let tab = 'general';
-const TABS = [['general', 'Général'], ['fin', 'Finances'], ['com', 'Commercial'], ['stock', 'Stock'], ['aff', 'Affichage'], ['sec', 'Sécurité'], ['mod', 'Modules'], ['notes', 'Sons & appareil'], ['bak', 'Sauvegarde']];
+const TABS = [['general', 'Général'], ['fin', 'Finances'], ['com', 'Commercial'], ['shop', 'Boutique en ligne'], ['stock', 'Stock'], ['aff', 'Affichage'], ['sec', 'Sécurité'], ['mod', 'Modules'], ['notes', 'Sons & appareil'], ['bak', 'Sauvegarde']];
 const DEFCATS = [['VERRE', '🥛'], ['EKOLO', '🍺'], ['BLUEBAND', '🧈'], ['BOISSONS', '🥤'], ['WHISKY', '🥃'], ['BIÈRES', '🍻'], ['JUS', '🧃'], ['ALIMENTATION', '🛒'], ['PRODUITS LAITIERS', '🥛'], ['HUILES', '🛢️'], ['SUCRERIES', '🍬'], ['PRODUITS MÉNAGERS', '🧴'], ['AUTRES', '📦']];
 const save = (patch, label) => { const b = batch(); b.merge('meta', 'settings', patch); if (label) jr(b, 'Paramètres', label + ' par ' + who()); b.commit(); };
 const PURGE = [['sales', 'Ventes', 1], ['purchases', 'Achats', 1], ['expenses', 'Dépenses', 1], ['cashops,sessions', 'Caisse (opérations et sessions)', 1], ['inventories', 'Inventaires', 1], ['journal', 'Historique', 1], ['justifs', 'Justifications', 1], ['calcs,events,messages,polls,tickets', 'Calculs, calendrier, messages, sondages, signalements', 1], ['products', 'Produits', 0], ['clients', 'Clients (dettes comprises)', 0], ['suppliers', 'Fournisseurs (dettes comprises)', 0]];
@@ -4026,6 +4161,13 @@ views.settings = el => {
   if (tab === 'sec' && adm) body = `<form class="card frm" id="sf">${fld("Déconnexion après inactivité (minutes)", 'idle', s.idle || 30, 'number', 'min="1"')}${fld('Version des conditions (CGU)', 'cguVersion', s.cguVersion, 'text')}<p class="muted sm">Changer la version demande à tous les utilisateurs d'accepter à nouveau les conditions.</p><button class="btn">Enregistrer</button></form>
     <div class="card"><h3>Dernières connexions</h3>${S.journal.filter(j => j.type === 'Connexion').slice(0, 12).map(j => `<div class="mi"><span>${esc(j.user)}</span><small class="muted">${new Date(j.ts).toLocaleString('fr-FR')}</small></div>`).join('') || '<p class="muted">Aucune connexion enregistrée.</p>'}</div>`;
   if (tab === 'mod' && adm) body = `<form class="card frm" id="sf"><p class="muted sm">Désactivez les modules inutiles pour ce commerce. Paramètres, Utilisateurs, Aide et Conditions restent toujours actifs.</p><div class="chkgrid">${Object.entries(MODULES).filter(([k]) => !PERMANENT.includes(k)).map(([k, l]) => chk('m_' + k, l, !(s.off || []).includes(k))).join('')}</div><button class="btn">Enregistrer</button></form>`;
+  if (tab === 'shop' && adm) body = `<form class="card frm" id="shf"><h3>🛍️ Boutique en ligne</h3><p class="muted sm">Vos clients commandent depuis un simple lien. Les commandes arrivent dans « Commandes en ligne », avec une sonnerie et une alerte Telegram. Le prix d'achat et le stock exact ne sont jamais publiés.</p>
+    <label class="chk"><input type="checkbox" name="shopOn" ${s.shopOn ? 'checked' : ''}> Boutique ouverte aux clients</label>
+    ${fld('Numéro WhatsApp de la boutique', 'shopWa', s.shopWa || s.phone || '', 'text', 'placeholder="Ex. 0991234567"')}
+    <label>Paiement Mobile Money (affiché aux clients)<textarea name="shopMomo" rows="2" placeholder="Airtel Money 099… (Nom) · M-Pesa 081… · Orange Money 089…">${esc(s.shopMomo || '')}</textarea></label>
+    <label>Livraison (zones, frais, délais)<textarea name="shopDeliv" rows="2" placeholder="Livraison dans la commune : 2 $ · Gratuite dès 50 $">${esc(s.shopDeliv || '')}</textarea></label>
+    <label>Message d'accueil<textarea name="shopMsg" rows="2" placeholder="Bienvenue ! Commandez, nous vous rappelons.">${esc(s.shopMsg || '')}</textarea></label>
+    <div class="row sp"><small class="muted">Lien : <b>${esc(shopUrl())}</b></small><button type="button" class="btn ghost sm" data-act="shopcopy">Copier</button></div><button class="btn">Enregistrer et publier</button></form>`;
   if (tab === 'com' && adm) { const tp = TP(), tm = TM(); body = `<form class="card frm" id="cf"><h4>Identité fiscale (affichée sur les factures)</h4><div class="two">${fld('NIF', 'nif', s.nif || '')}${fld('RCCM', 'rccm', s.rccm || '')}</div>${fld('ID.NAT', 'idnat', s.idnat || '')}
     <h4>Propriétaire (rapport hebdomadaire)</h4><div class="two">${fld('Téléphone WhatsApp', 'ownerPhone', s.ownerPhone || '')}${fld('E-mail', 'ownerEmail', s.ownerEmail || '', 'email')}</div>
     <h4>Remises automatiques par catégorie de client (%)</h4><div class="two">${fld('Grossiste', 'tp_gros', tp.gros, 'number', 'step="any" min="0" max="90"')}${fld('Client fidèle', 'tp_fidele', tp.fidele, 'number', 'step="any" min="0" max="90"')}</div>${fld('Client VIP', 'tp_vip', tp.vip, 'number', 'step="any" min="0" max="90"')}
@@ -4069,6 +4211,7 @@ views.settings = el => {
   $('#nf')?.addEventListener('submit', ev => { ev.preventDefault(); const v = Object.fromEntries(new FormData(ev.target)); save({ sound: !!v.sound, vol: +v.vol }); toast('Enregistré'); });
 };
 A.stab = d => { tab = d.k; views.settings($('#view')); };
+  A.gotoshop = () => { tab = 'shop'; if (S.route === 'settings') views.settings($('#view')); else location.hash = '#/settings'; };
 A.logodel = () => { save({ logo: '' }, 'Logo retiré'); };
 A.colorreset = () => { save({ color: '' }); };
 A.addcats = () => {
@@ -4196,7 +4339,7 @@ A.purge = async () => {
 // Point d'entrée : authentification Google, rôles, navigation, synchronisation
 let cur = '', unsub = null, pending = false, idleT = null;
 const SEED_CATS = [['VERRE', '🥛'], ['EKOLO', '🍺'], ['BLUEBAND', '🧈'], ['BOISSONS', '🥤'], ['WHISKY', '🥃'], ['BIÈRES', '🍻'], ['JUS', '🧃'], ['ALIMENTATION', '🛒'], ['PRODUITS LAITIERS', '🥛'], ['HUILES', '🛢️'], ['SUCRERIES', '🍬'], ['PRODUITS MÉNAGERS', '🧴'], ['AUTRES', '📦']];
-const GROUPS = [['Commerce', ['dashboard', 'sales', 'products', 'categories', 'purchases', 'inventory', 'lots', 'depots', 'labels']], ['Finances', ['cash', 'expenses', 'partners', 'reports', 'boss', 'health']], ['Contrôle', ['journal', 'justifs', 'usage']], ['Outils', ['calc', 'calendar', 'notifs', 'chat', 'academy', 'help']], ['Administration', ['users', 'settings', 'legal']]];
+const GROUPS = [['Commerce', ['dashboard', 'sales', 'orders', 'products', 'categories', 'purchases', 'inventory', 'lots', 'depots', 'labels']], ['Finances', ['cash', 'expenses', 'partners', 'reports', 'boss', 'health']], ['Contrôle', ['journal', 'justifs', 'usage']], ['Outils', ['calc', 'calendar', 'notifs', 'chat', 'academy', 'help']], ['Administration', ['users', 'settings', 'legal']]];
 const seen = { msgs: null, alarms: null };
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -4287,7 +4430,7 @@ function badge() {
   const n = alertsList().filter(a => a.lv >= 2).length, b = $('#bdg'); if (b) { b.hidden = !n; b.textContent = n > 9 ? '9+' : n; }
   // sonneries : nouveaux messages et nouvelles alertes graves (pas au premier chargement)
   const ids = new Set(S.messages.map(m => m.id)); if (seen.msgs && S.lastSync) { const nw = S.messages.filter(m => !seen.msgs.has(m.id) && m.uid !== S.user?.uid); if (nw.length) { sound('msg'); if (document.hidden) notify('Nouveau message', nw[0].user + ' : ' + (nw[0].text || '').slice(0, 80)); } } if (S.messages.length || S.lastSync) seen.msgs = ids;
-  const keys = new Set(alertsList().filter(a => a.lv >= 3).map(a => a.kind + a.title)); if (seen.alarms && S.lastSync) { const nw = [...keys].filter(k => !seen.alarms.has(k)); if (nw.length) { sound('alarm'); notify('Alerte KAJIMINYI', nw[0]); } } if (S.lastSync) seen.alarms = keys;
+  const keys = new Set(alertsList().filter(a => a.lv >= 3).map(a => a.kind + a.title)); if (seen.alarms && S.lastSync) { const nw = [...keys].filter(k => !seen.alarms.has(k)); if (nw.length) { sound('alarm'); notify('Alerte KAJIMINYI', nw[0]); } } if (S.lastSync) seen.alarms = keys; try { window.__shopTick?.(); } catch { /* */ }
 }
 function refresh() {
   if (!$('#view')) return;
