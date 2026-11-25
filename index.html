@@ -344,6 +344,35 @@ html,body{height:100%;overflow:hidden;overscroll-behavior:none}
 .rbar{display:flex;align-items:center;gap:8px;padding:6px 10px;border-top:1px solid var(--bd);font-size:.82rem;background:rgba(0,168,107,.08)}.rbar span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rbar button{background:none;border:0;font-size:1rem}
 .chmenu{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:10px;border-top:1px solid var(--bd)}.chmenu[hidden]{display:none}.chmenu button{display:flex;flex-direction:column;align-items:center;gap:4px;background:rgba(0,0,0,.05);border:0;border-radius:12px;padding:10px 4px;font-size:.78rem;color:inherit}.chmenu span{font-size:1.4rem}
 .recbar{display:flex;align-items:center;gap:10px;padding:10px}.recdot{width:12px;height:12px;border-radius:50%;background:#e53935;animation:rb 1s infinite}@keyframes rb{50%{opacity:.25}}
+
+.wa{display:flex;flex-direction:column;height:calc(100dvh - 112px - var(--bnavh) - env(safe-area-inset-top));margin:0 -4px;background:var(--wabg,#efeae2);border-radius:0;overflow:hidden;position:relative}
+@media(min-width:900px){.wa{height:calc(100dvh - 104px);border-radius:18px;margin:0}}
+body:has(.wa) .fab-bot{display:none!important}
+.wtabs{display:flex;gap:6px;overflow-x:auto;padding:8px 10px;background:var(--card,#fff);border-bottom:1px solid var(--bd);scrollbar-width:none}.wtabs::-webkit-scrollbar{display:none}.wtabs .chip{flex:none;white-space:nowrap}
+.wahead{display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--card,#fff);border-bottom:1px solid var(--bd)}.wahead i{width:40px;height:40px;border-radius:50%;color:#fff;font-style:normal;font-weight:700;font-size:1.1rem;display:grid;place-items:center;flex:none}.wahead b{display:block;line-height:1.2}.wahead small{color:var(--mu)}
+.wlist{flex:1;overflow-y:auto;padding:10px 10px 6px;background-color:var(--wabg,#efeae2);background-image:radial-gradient(rgba(0,0,0,.045) 1.2px,transparent 1.3px);background-size:22px 22px;-webkit-overflow-scrolling:touch}
+.wday{text-align:center;margin:10px 0}.wday span{background:var(--wach,#fff);color:var(--mu);font-size:.72rem;padding:4px 12px;border-radius:8px;box-shadow:0 1px 1px rgba(0,0,0,.08)}
+.wrow{display:flex;margin-bottom:2px}.wrow.me{justify-content:flex-end}.wrow.last{margin-bottom:8px}
+.wb{position:relative;max-width:82%;min-width:64px;background:var(--wain,#fff);color:var(--tx);border-radius:10px;padding:6px 8px 17px;box-shadow:0 1px 1px rgba(0,0,0,.1);word-break:break-word;font-size:.95rem;line-height:1.35}.wb.me{background:var(--waout,#d9fdd3)}
+.wb.first{border-top-left-radius:2px}.wb.me.first{border-top-left-radius:10px;border-top-right-radius:2px}
+.wb.ann{border:1px solid #f0b445}.wb.oi{padding:3px 3px 3px}.wb.oi .wtm{background:rgba(0,0,0,.45);color:#fff;border-radius:8px;padding:0 6px;right:8px;bottom:8px}.wb.oi .wck{color:#fff}
+.wn{font-size:.78rem;font-weight:700;margin-bottom:2px}.wt{white-space:pre-wrap}.wt a,.wb a{color:#027eb5}
+.wtm{position:absolute;right:8px;bottom:3px;font-size:.66rem;color:var(--mu);white-space:nowrap}.wck{color:#53bdeb;font-size:.72rem}
+.wimg{display:block;max-width:100%;width:260px;border-radius:8px;margin-bottom:3px}
+.wb .qt{background:rgba(0,0,0,.06);border-left:4px solid #00a86b;border-radius:6px;padding:4px 8px;margin-bottom:4px;font-size:.8rem;opacity:1}.wb .qt b{color:#00a86b}
+.wact{display:none;gap:12px;margin-top:6px;padding-top:6px;border-top:1px solid rgba(0,0,0,.08);flex-wrap:wrap}.wb.sel .wact{display:flex}.wb.sel{box-shadow:0 0 0 2px #00a86b55}.wact button{background:none;border:0;color:var(--mu);font-size:.78rem;padding:2px 0}
+.wb .fcard{background:rgba(0,0,0,.05)}
+.vn{display:flex;align-items:center;gap:8px;min-width:230px}.vn .vp{flex:none;width:36px;height:36px;border-radius:50%;border:0;background:#00a86b;color:#fff;display:grid;place-items:center}.vn input[type=range]{flex:1;min-width:80px;accent-color:#00a86b;height:4px}.vn .vt{font-size:.74rem;color:var(--mu);min-width:34px}.vav{width:30px;height:30px;border-radius:50%;color:#fff;font-style:normal;font-weight:700;display:grid;place-items:center;flex:none;font-size:.85rem}
+.wempty{text-align:center;margin:30px auto;max-width:260px;background:var(--wach,#fff);padding:12px;border-radius:12px;color:var(--mu);font-size:.85rem}
+.wbar{background:transparent}.wlock{text-align:center;padding:12px;background:var(--card,#fff);margin:0;color:var(--mu);font-size:.85rem}
+.wa-in{display:flex;width:100%;box-sizing:border-box;align-items:flex-end;gap:8px;padding:6px 8px calc(6px + 0px)}.wa-pill{flex:1;min-width:0;display:flex;align-items:center;gap:2px;background:var(--wapill,#fff);border-radius:26px;padding:2px 6px;box-shadow:0 1px 2px rgba(0,0,0,.12);min-height:48px}.wa-pill input[name=text]{flex:1;min-width:0;border:0!important;background:transparent!important;font-size:1rem;padding:10px 6px;color:var(--tx);outline:none;box-shadow:none}
+.wa-pill .ib{background:none;border:0;color:var(--mu);width:40px;height:40px;display:grid;place-items:center;flex:none;border-radius:50%}.wa-in.typing .cam{display:none}
+.wa-go{flex:none;width:48px;height:48px;border-radius:50%;border:0;background:#00a86b;color:#fff;display:grid;place-items:center;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.wa-pill.recbar{padding:0 14px;gap:10px}.recdot{width:11px;height:11px;border-radius:50%;background:#e53935;animation:rb 1s infinite}@keyframes rb{50%{opacity:.25}}
+.rbar{display:flex;align-items:center;gap:8px;margin:6px 8px 0;padding:6px 10px;background:var(--wapill,#fff);border-radius:12px 12px 0 0;font-size:.8rem;border-left:0}.rbar i{width:4px;align-self:stretch;border-radius:2px}.rbar span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rbar button{background:none;border:0;font-size:1rem;color:var(--mu)}
+.chmenu{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:6px 8px;padding:12px;background:var(--wapill,#fff);border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,.15)}.chmenu[hidden],.chemo[hidden]{display:none}.chmenu button{display:flex;flex-direction:column;align-items:center;gap:4px;background:rgba(0,0,0,.04);border:0;border-radius:12px;padding:10px 4px;font-size:.78rem;color:var(--tx)}.chmenu span{font-size:1.5rem}
+.chemo{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;margin:6px 8px;padding:8px;background:var(--wapill,#fff);border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,.15);max-height:150px;overflow:auto}.chemo button{background:none;border:0;font-size:1.4rem;padding:4px}
+[data-theme=dark] .wa{--wabg:#0b141a;--wain:#202c33;--waout:#005c4b;--wapill:#202c33;--wach:#182229}[data-theme=dark] .wlist{background-image:radial-gradient(rgba(255,255,255,.04) 1.2px,transparent 1.3px)}[data-theme=dark] .wb a{color:#53bdeb}[data-theme=dark] .wb .qt{background:rgba(255,255,255,.07)}
 </style>
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -683,7 +712,7 @@ function batch() {
     upd: (c, id, d) => { auditChg(api, c, id, d); b.update(F.doc(F.db, c, id), d); return api; },
     del: (c, id) => { b.delete(F.doc(F.db, c, id)); return api; },
     commit: () => {
-      const p = b.commit(); sound('ok');
+      const p = b.commit(); sound('ok'); try { (api._tg || []).forEach(x => tgJournal(x)); } catch { /* alertes jamais bloquantes */ }
       S.pend = (S.pend || 0) + 1; window.__net?.(); p.then(() => {}, () => {}).then(() => { S.pend = Math.max(0, S.pend - 1); window.__net?.(); });
       p.catch(e => { console.error(e); logErr('Écriture refusée : ' + (e.code || e.message)); toast(e.code === 'permission-denied' ? "Action non autorisée pour votre profil" : 'Erreur de synchronisation : ' + e.message, 'err'); });
       return p;
@@ -984,12 +1013,50 @@ A.lblprint = () => {
 .rbar{display:flex;align-items:center;gap:8px;padding:6px 10px;border-top:1px solid var(--bd);font-size:.82rem;background:rgba(0,168,107,.08)}.rbar span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rbar button{background:none;border:0;font-size:1rem}
 .chmenu{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:10px;border-top:1px solid var(--bd)}.chmenu[hidden]{display:none}.chmenu button{display:flex;flex-direction:column;align-items:center;gap:4px;background:rgba(0,0,0,.05);border:0;border-radius:12px;padding:10px 4px;font-size:.78rem;color:inherit}.chmenu span{font-size:1.4rem}
 .recbar{display:flex;align-items:center;gap:10px;padding:10px}.recdot{width:12px;height:12px;border-radius:50%;background:#e53935;animation:rb 1s infinite}@keyframes rb{50%{opacity:.25}}
+
+.wa{display:flex;flex-direction:column;height:calc(100dvh - 112px - var(--bnavh) - env(safe-area-inset-top));margin:0 -4px;background:var(--wabg,#efeae2);border-radius:0;overflow:hidden;position:relative}
+@media(min-width:900px){.wa{height:calc(100dvh - 104px);border-radius:18px;margin:0}}
+body:has(.wa) .fab-bot{display:none!important}
+.wtabs{display:flex;gap:6px;overflow-x:auto;padding:8px 10px;background:var(--card,#fff);border-bottom:1px solid var(--bd);scrollbar-width:none}.wtabs::-webkit-scrollbar{display:none}.wtabs .chip{flex:none;white-space:nowrap}
+.wahead{display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--card,#fff);border-bottom:1px solid var(--bd)}.wahead i{width:40px;height:40px;border-radius:50%;color:#fff;font-style:normal;font-weight:700;font-size:1.1rem;display:grid;place-items:center;flex:none}.wahead b{display:block;line-height:1.2}.wahead small{color:var(--mu)}
+.wlist{flex:1;overflow-y:auto;padding:10px 10px 6px;background-color:var(--wabg,#efeae2);background-image:radial-gradient(rgba(0,0,0,.045) 1.2px,transparent 1.3px);background-size:22px 22px;-webkit-overflow-scrolling:touch}
+.wday{text-align:center;margin:10px 0}.wday span{background:var(--wach,#fff);color:var(--mu);font-size:.72rem;padding:4px 12px;border-radius:8px;box-shadow:0 1px 1px rgba(0,0,0,.08)}
+.wrow{display:flex;margin-bottom:2px}.wrow.me{justify-content:flex-end}.wrow.last{margin-bottom:8px}
+.wb{position:relative;max-width:82%;min-width:64px;background:var(--wain,#fff);color:var(--tx);border-radius:10px;padding:6px 8px 17px;box-shadow:0 1px 1px rgba(0,0,0,.1);word-break:break-word;font-size:.95rem;line-height:1.35}.wb.me{background:var(--waout,#d9fdd3)}
+.wb.first{border-top-left-radius:2px}.wb.me.first{border-top-left-radius:10px;border-top-right-radius:2px}
+.wb.ann{border:1px solid #f0b445}.wb.oi{padding:3px 3px 3px}.wb.oi .wtm{background:rgba(0,0,0,.45);color:#fff;border-radius:8px;padding:0 6px;right:8px;bottom:8px}.wb.oi .wck{color:#fff}
+.wn{font-size:.78rem;font-weight:700;margin-bottom:2px}.wt{white-space:pre-wrap}.wt a,.wb a{color:#027eb5}
+.wtm{position:absolute;right:8px;bottom:3px;font-size:.66rem;color:var(--mu);white-space:nowrap}.wck{color:#53bdeb;font-size:.72rem}
+.wimg{display:block;max-width:100%;width:260px;border-radius:8px;margin-bottom:3px}
+.wb .qt{background:rgba(0,0,0,.06);border-left:4px solid #00a86b;border-radius:6px;padding:4px 8px;margin-bottom:4px;font-size:.8rem;opacity:1}.wb .qt b{color:#00a86b}
+.wact{display:none;gap:12px;margin-top:6px;padding-top:6px;border-top:1px solid rgba(0,0,0,.08);flex-wrap:wrap}.wb.sel .wact{display:flex}.wb.sel{box-shadow:0 0 0 2px #00a86b55}.wact button{background:none;border:0;color:var(--mu);font-size:.78rem;padding:2px 0}
+.wb .fcard{background:rgba(0,0,0,.05)}
+.vn{display:flex;align-items:center;gap:8px;min-width:230px}.vn .vp{flex:none;width:36px;height:36px;border-radius:50%;border:0;background:#00a86b;color:#fff;display:grid;place-items:center}.vn input[type=range]{flex:1;min-width:80px;accent-color:#00a86b;height:4px}.vn .vt{font-size:.74rem;color:var(--mu);min-width:34px}.vav{width:30px;height:30px;border-radius:50%;color:#fff;font-style:normal;font-weight:700;display:grid;place-items:center;flex:none;font-size:.85rem}
+.wempty{text-align:center;margin:30px auto;max-width:260px;background:var(--wach,#fff);padding:12px;border-radius:12px;color:var(--mu);font-size:.85rem}
+.wbar{background:transparent}.wlock{text-align:center;padding:12px;background:var(--card,#fff);margin:0;color:var(--mu);font-size:.85rem}
+.wa-in{display:flex;width:100%;box-sizing:border-box;align-items:flex-end;gap:8px;padding:6px 8px calc(6px + 0px)}.wa-pill{flex:1;min-width:0;display:flex;align-items:center;gap:2px;background:var(--wapill,#fff);border-radius:26px;padding:2px 6px;box-shadow:0 1px 2px rgba(0,0,0,.12);min-height:48px}.wa-pill input[name=text]{flex:1;min-width:0;border:0!important;background:transparent!important;font-size:1rem;padding:10px 6px;color:var(--tx);outline:none;box-shadow:none}
+.wa-pill .ib{background:none;border:0;color:var(--mu);width:40px;height:40px;display:grid;place-items:center;flex:none;border-radius:50%}.wa-in.typing .cam{display:none}
+.wa-go{flex:none;width:48px;height:48px;border-radius:50%;border:0;background:#00a86b;color:#fff;display:grid;place-items:center;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.wa-pill.recbar{padding:0 14px;gap:10px}.recdot{width:11px;height:11px;border-radius:50%;background:#e53935;animation:rb 1s infinite}@keyframes rb{50%{opacity:.25}}
+.rbar{display:flex;align-items:center;gap:8px;margin:6px 8px 0;padding:6px 10px;background:var(--wapill,#fff);border-radius:12px 12px 0 0;font-size:.8rem;border-left:0}.rbar i{width:4px;align-self:stretch;border-radius:2px}.rbar span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rbar button{background:none;border:0;font-size:1rem;color:var(--mu)}
+.chmenu{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:6px 8px;padding:12px;background:var(--wapill,#fff);border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,.15)}.chmenu[hidden],.chemo[hidden]{display:none}.chmenu button{display:flex;flex-direction:column;align-items:center;gap:4px;background:rgba(0,0,0,.04);border:0;border-radius:12px;padding:10px 4px;font-size:.78rem;color:var(--tx)}.chmenu span{font-size:1.5rem}
+.chemo{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;margin:6px 8px;padding:8px;background:var(--wapill,#fff);border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,.15);max-height:150px;overflow:auto}.chemo button{background:none;border:0;font-size:1.4rem;padding:4px}
+[data-theme=dark] .wa{--wabg:#0b141a;--wain:#202c33;--waout:#005c4b;--wapill:#202c33;--wach:#182229}[data-theme=dark] .wlist{background-image:radial-gradient(rgba(255,255,255,.04) 1.2px,transparent 1.3px)}[data-theme=dark] .wb a{color:#53bdeb}[data-theme=dark] .wb .qt{background:rgba(255,255,255,.07)}
 </style><div class="g">${L.map(p => `<div class="l"><div class="n">${esc(p.name)}</div><div class="p">${usd(p.sell)}</div>${barSvg(p.barcode)}</div>`).join('')}</div>`);
 };
 
 /* ================= ALERTES TELEGRAM ================= */
 const tgOn = () => { const s = S.settings; return !!(s.tgToken && s.tgChat && s.tgOff !== true); };
-const tgEv = k => (S.settings.tgEv ? S.settings.tgEv[k] !== false : true);
+const TG_EV = [['big', '💰 Grosse vente'], ['vente', '🛒 Toutes les ventes'], ['cancel', '❌ Annulations de vente'], ['ret', '↩️ Retours / remboursements'], ['stock', '🚨 Rupture / stock faible'], ['purchase', '📦 Entrées de stock'], ['expense', '💸 Dépenses'], ['cash', '🏦 Ouverture / clôture de caisse'], ['ecart', '🧾 Écarts de caisse'], ['inv', '📋 Inventaires'], ['product', '🏷️ Produits, prix, lots, transferts'], ['partner', '👥 Clients et fournisseurs'], ['user', '🔑 Utilisateurs et accès'], ['sys', '⚙️ Paramètres, taux, sauvegardes'], ['just', '📝 Justifications'], ['msg', '💬 Messages du chat'], ['login', '🔓 Connexions (très fréquent)']];
+const tgEvOn = k => { const e = S.settings.tgEv || {}; if (k === 'login') return e.login === true; if (k === 'big') return (e.big ?? e.sale) !== false; return e[k] !== false; };
+const tgEv = k => tgEvOn(k);
+const TG_MAP = { 'Vente': ['vente', '🛒'], 'Entrée stock': ['purchase', '📦'], 'Dépense': ['expense', '💸'], 'Ouverture caisse': ['cash', '🏦'], 'Clôture caisse': ['cash', '🏦'], 'Inventaire': ['inv', '📋'], 'Produit créé': ['product', '🆕'], 'Modification produit': ['product', '✏️'], 'Produit supprimé': ['product', '🗑️'], 'Code-barres': ['product', '🏷️'], 'Lot': ['product', '🧪'], 'Transfert': ['product', '🔁'], 'Catégorie': ['product', '📂'], 'Client': ['partner', '👤'], 'Taux fournisseur': ['partner', '🏭'], 'Utilisateur': ['user', '🔑'], 'CGU acceptées': ['user', '📜'], 'Connexion': ['login', '🔓'], 'Paramètres': ['sys', '⚙️'], 'Modification': ['sys', '✏️'], 'Taux de change': ['sys', '💱'], 'Sauvegarde': ['sys', '💾'], 'Restauration': ['sys', '♻️'], 'Données effacées': ['sys', '⚠️'], 'Justification': ['just', '📝'] };
+function tgJournal(x) {
+  if (!tgOn()) return; const m = TG_MAP[x.type]; if (!m || !tgEv(m[0])) return; if (S.settings.tgNoSelf && S.me?.role === 'admin') return;
+  let head = m[1] + ' ' + x.type; const big = num(S.settings.tgBig) || 100;
+  if (x.type === 'Vente' && x.amt >= big && tgEv('big')) head = '💰 GROSSE VENTE';
+  tgNotify(m[0], `${head}\n${String(x.desc || '').replace(/\s*\(par [^)]*\)\s*$/, '')}${x.amt != null && x.type !== 'Connexion' ? '\n💵 ' + usd(x.amt) : ''}`);
+}
 async function tgPost(text, token = S.settings.tgToken, chat = S.settings.tgChat) {
   const r = await fetch('https://api.telegram.org/bot' + token + '/sendMessage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: String(chat).trim(), text: String(text).slice(0, 3900) }) });
   const j = await r.json().catch(() => ({})); if (!r.ok || !j.ok) throw new Error(j.description || ('Telegram ' + r.status)); return j;
@@ -998,22 +1065,23 @@ const tgQ = () => { try { return JSON.parse(localStorage.getItem('ksp_tgq') || '
 const tgQset = q => { try { localStorage.setItem('ksp_tgq', JSON.stringify(q.slice(-30))); } catch { /* */ } };
 async function tgFlush() { if (!tgOn() || !navigator.onLine) return; let q = tgQ(); if (!q.length) return; const left = []; for (const m of q) { if (Date.now() - m.t > 864e5) continue; try { await tgPost(m.x); } catch { left.push(m); } } tgQset(left); }
 function tgNotify(kind, text) {
-  try { if (!tgOn() || !tgEv(kind)) return; const full = `🏪 ${S.settings.shop || 'KAJIMINYI'}\n${text}\n👤 ${who()} · ${fmtDate(Date.now())}`;
+  try { if (!tgOn() || !tgEv(kind)) return; const full = `🏪 ${S.settings.shop || 'KAJIMINYI'}\n${text}\n👤 ${who()} · ${fmtDate(Date.now())}`; if (S.settings.tgNoSelf && S.me?.role === 'admin') return;
     tgPost(full).catch(() => { const q = tgQ(); q.push({ t: Date.now(), x: full }); tgQset(q); }); } catch { /* jamais bloquant */ }
 }
 window.addEventListener('online', () => setTimeout(tgFlush, 1500)); setTimeout(tgFlush, 12000);
 function tgSale(s, need) {
   if (!tgOn()) return;
-  const big = num(S.settings.tgBig) || 100; if (s.total >= big && tgEv('sale')) tgNotify('sale', `💰 Grosse vente ${s.no} : ${fmAt(s.total, s.rate)}${s.clientName ? '\nClient : ' + s.clientName : ''}`);
   for (const pid in need) { const p = S.products.find(x => x.id === pid); if (!p) continue; const left = r2((p.qty || 0) - need[pid]);
     if (left <= 0) tgNotify('stock', `🚨 RUPTURE : ${p.name} (stock 0)`); else if (p.min > 0 && left <= p.min && (p.qty || 0) > p.min) tgNotify('stock', `⚠️ Stock faible : ${p.name} — reste ${left} ${p.unit} (minimum ${p.min})`); }
 }
+A.tgall = d => document.querySelectorAll('#tgf [name^=ev_]').forEach(c => { c.checked = d.v === '1' && c.name !== 'ev_login' ? true : (d.v === '1' ? false : false); });
+A.tgess = () => document.querySelectorAll('#tgf [name^=ev_]').forEach(c => { c.checked = ['big', 'cancel', 'ret', 'stock', 'ecart', 'cash', 'expense', 'purchase', 'sys', 'user'].includes(c.name.slice(3)); });
 A.tgtest = async () => { const t = $('#tgtok')?.value.trim() || S.settings.tgToken, c = $('#tgchat')?.value.trim() || S.settings.tgChat; if (!t || !c) return toast('Renseignez le jeton et le numéro de discussion', 'err');
   try { await tgPost(`✅ Test réussi — les alertes de ${S.settings.shop || 'votre boutique'} arriveront ici.`, t, c); toast('Message de test envoyé : regardez Telegram'); } catch (e) { toast('Échec : ' + (e.message || e) + ' (avez-vous appuyé sur Démarrer dans le bot ?)', 'err'); } };
 document.addEventListener('submit', e => {
   if (e.target.id !== 'tgf') return; e.preventDefault(); if (S.me?.role !== 'admin') return;
-  const v = Object.fromEntries(new FormData(e.target)), ev = {}; ['sale', 'stock', 'cancel', 'ret', 'ecart'].forEach(k => { ev[k] = !!v['ev_' + k]; });
-  const b = batch(); b.merge('meta', 'settings', { tgToken: v.tgToken.trim(), tgChat: v.tgChat.trim(), tgBig: num(v.tgBig) || 100, tgEv: ev, tgOff: !v.tgOn }); jr(b, 'Paramètres', 'Alertes Telegram ' + (v.tgOn ? 'activées' : 'désactivées') + ' (par ' + who() + ')'); b.commit(); toast('Alertes Telegram enregistrées');
+  const v = Object.fromEntries(new FormData(e.target)), ev = {}; TG_EV.forEach(([k]) => { ev[k] = !!v['ev_' + k]; });
+  const b = batch(); b.merge('meta', 'settings', { tgToken: v.tgToken.trim(), tgChat: v.tgChat.trim(), tgBig: num(v.tgBig) || 100, tgEv: ev, tgOff: !v.tgOn, tgNoSelf: !!v.tgNoSelf }); jr(b, 'Paramètres', 'Alertes Telegram ' + (v.tgOn ? 'activées' : 'désactivées') + ' (par ' + who() + ')'); b.commit(); toast('Alertes Telegram enregistrées');
 });
 
 // Suppression définitive de collections entières (administrateur). Lit le serveur, puis supprime par paquets de 400.
@@ -1032,6 +1100,7 @@ const who = () => S.me?.name || S.user?.email || '';
 function jr(b, type, desc, amt = null, cur = '', cat = '', ref = '') {
   const id = uid(), ts = Date.now();
   b.set('journal', id, { id, ts, day: dayKey(ts), uid: S.user.uid, user: who(), email: S.user.email, type, desc, amt, cur, cat, ref });
+  (b._tg ??= []).push({ type, desc, amt });
   return id;
 }
 // cur = compte de caisse (CDF, USD, MMC, MM, BANK) ; amt dans la devise native du compte
@@ -3224,35 +3293,11 @@ const dmKeys = () => { const s = new Set(); S.messages.forEach(m => { if (typeof
 const fmtSize = b => b > 1048576 ? (b / 1048576).toFixed(1) + ' Mo' : Math.max(1, Math.round(b / 1024)) + ' Ko';
 const linkify = h => h.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
 const thumb = u => u.replace('/upload/', '/upload/w_700,q_auto,f_auto/');
-function fileHtml(f) {
-  if (!f || !f.url) return '';
-  if (f.kind === 'image') return `<a href="${esc(f.url)}" target="_blank" rel="noopener"><img src="${esc(thumb(f.url))}" loading="lazy" style="max-width:100%;border-radius:12px;margin-top:6px" alt="${esc(f.name || 'photo')}"></a>`;
-  if (f.kind === 'video') return `<video controls preload="metadata" playsinline src="${esc(f.url)}" style="max-width:100%;border-radius:12px;margin-top:6px"></video>`;
-  if (f.kind === 'audio') return `<audio controls preload="none" src="${esc(f.url)}" style="width:100%;margin-top:6px"></audio>${f.dur ? `<small class="muted">🎤 ${Math.floor(f.dur / 60)}:${String(f.dur % 60).padStart(2, '0')}</small>` : ''}`;
-  return `<a class="fcard" href="${esc(f.url)}" target="_blank" rel="noopener">📄 <span><b>${esc(f.name || 'Document')}</b><br><small>${f.size ? fmtSize(f.size) : ''} · Ouvrir</small></span></a>`;
-}
 const contactHtml = c => !c ? '' : `<div class="fcard cc">👤 <span><b>${esc(c.name)}</b><br><small>${esc(c.phone || '')}</small></span><span class="cbt">${c.phone ? `<a class="btn ghost sm" href="tel:${esc(c.phone)}">Appeler</a><a class="btn green sm" target="_blank" rel="noopener" href="https://wa.me/${waPh2(c.phone)}">WhatsApp</a>` : ''}</span></div>`;
 const locHtml = l => !l ? '' : `<a class="fcard" target="_blank" rel="noopener" href="https://maps.google.com/?q=${l.lat},${l.lng}">📍 <span><b>Position partagée</b><br><small>Ouvrir sur la carte</small></span></a>`;
 const chMsgs = () => S.messages.filter(m => m.ch === chTab).sort((a, b) => a.ts - b.ts).slice(-150);
-function paintChat() {
-  const box = $('#chatlist'); if (!box) return; const near = box.scrollHeight - box.scrollTop - box.clientHeight < 90;
-  box.innerHTML = chMsgs().map(m => { const me = m.uid === S.user.uid;
-    const body = m.deleted ? '<i class="muted">Message supprimé</i>' : `${m.reply ? `<div class="qt"><b>${esc(m.reply.user)}</b><br>${esc(m.reply.text)}</div>` : ''}${m.text ? `<div>${linkify(esc(m.text))}</div>` : ''}${fileHtml(m.file)}${contactHtml(m.contact)}${locHtml(m.loc)}${attHtml(m.att)}`;
-    return `<div class="msg ${me ? 'me' : ''} ${m.announce ? 'ann' : ''}"><small><b>${esc(m.user)}</b> · ${fmtDate(m.ts)}</small>${body}${m.deleted ? '' : `<div class="mact"><button data-act="chreply" data-id="${m.id}" title="Répondre">↩ Répondre</button>${me || isMgr() ? `<button data-act="chdel" data-id="${m.id}" title="Supprimer">🗑</button>` : ''}</div>`}</div>`; }).join('') || '<p class="muted" style="text-align:center">Aucun message. Écrivez le premier !</p>';
-  if (near || !box.dataset.init) { box.scrollTop = box.scrollHeight; box.dataset.init = 1; }
-}
-function paintBar() {
-  const bar = $('#chbar'); if (!bar) return; const keep = bar.querySelector('input[name=text]')?.value || '';
-  const locked = chTab === 'annonces' && !isMgr();
-  if (locked) { bar.innerHTML = '<p class="muted sm" style="padding:8px">Seuls l\'administrateur et le gérant publient des annonces.</p>'; return; }
-  if (chRec) { bar.innerHTML = `<div class="recbar"><span class="recdot"></span><b id="rect">0:00</b><span class="muted sm">Enregistrement…</span><button class="btn ghost sm" data-act="recx">✕ Annuler</button><button class="btn sm" data-act="recok">${ic('send', 16)} Envoyer</button></div>`; return; }
-  bar.innerHTML = `${chReply ? `<div class="rbar">↩ <span>Réponse à <b>${esc(chReply.user)}</b> : ${esc(chReply.text)}</span><button data-act="chnoreply">✕</button></div>` : ''}${chBusy ? `<div class="rbar">⏫ Envoi de ${esc(chBusy.name)}… <b id="chpct">${chBusy.pct || 0}%</b></div>` : ''}
-    <div id="chmenu" class="chmenu" hidden>${[['photo', '📷', 'Photo'], ['gallery', '🖼️', 'Galerie / vidéo'], ['doc', '📄', 'Document'], ['audio', '🎵', 'Audio'], ['contact', '👤', 'Contact'], ['loc', '📍', 'Position']].map(([k, i, t]) => `<button data-act="${k === 'contact' ? 'chcontact' : k === 'loc' ? 'chloc' : 'chpick'}" data-k="${k}"><span>${i}</span>${t}</button>`).join('')}</div>
-    <form id="chatf" class="chatbar"><button type="button" class="clip" data-act="chmenu" title="Joindre">📎</button><input name="text" placeholder="${chTab === 'admin' && !isMgr() ? 'Message à l\'administration…' : 'Votre message…'}" autocomplete="off" value="${esc(keep)}"><button type="button" class="clip" data-act="recgo" title="Message vocal">🎤</button><button class="btn">${ic('send', 18)}</button></form>`;
-  $('#chatf', bar).addEventListener('submit', e => { e.preventDefault(); const t = e.target.text.value.trim(); if (!t) return; sendMsg({ text: t }); e.target.reset(); });
-}
 async function sendMsg(extra) {
-  try { const id = uid(), m = { id, ts: Date.now(), uid: S.user.uid, user: who(), email: S.user.email, ch: chTab, text: '', announce: chTab === 'annonces', ...extra }; if (chReply) m.reply = chReply; const b = batch(); b.set('messages', id, m); b.commit(); chReply = null; paintBar(); }
+  try { const id = uid(), m = { id, ts: Date.now(), uid: S.user.uid, user: who(), email: S.user.email, ch: chTab, text: '', announce: chTab === 'annonces', ...extra }; if (chReply) m.reply = chReply; const b = batch(); b.set('messages', id, m); b.commit(); chReply = null; paintBar(); if (!isDM() && !m.reply?.__x) tgNotify('msg', `💬 ${chName(chTab)} — ${m.text ? m.text.slice(0, 300) : m.file ? '[' + ({ image: 'Photo', video: 'Vidéo', audio: 'Message vocal', doc: 'Document: ' + (m.file.name || '') }[m.file.kind] || 'Fichier') + ']' : m.contact ? '[Contact] ' + m.contact.name : m.loc ? '[Position]' : ''}`); }
   catch (e) { toast(e.message || 'Envoi impossible', 'err'); }
 }
 function upCloud(blob, name, onp) {
@@ -3279,7 +3324,6 @@ A.recgo = async () => {
 };
 const recEnd = send => { const r = chRec; if (!r) return; clearInterval(r.tick); chRec = null; r.mr.onstop = () => { r.st.getTracks().forEach(t => t.stop()); if (send && r.chunks.length) { const type = (r.mime || 'audio/webm').split(';')[0], dur = Math.max(1, Math.round((Date.now() - r.t0) / 1000)); sendFile(new File([new Blob(r.chunks, { type })], 'vocal-' + Date.now() + (type.includes('mp4') ? '.m4a' : '.webm'), { type }), { dur }); } }; try { r.mr.stop(); } catch { r.st.getTracks().forEach(t => t.stop()); } paintBar(); };
 A.recok = () => recEnd(true); A.recx = () => recEnd(false);
-A.chmenu = () => { const m = $('#chmenu'); if (m) m.hidden = !m.hidden; };
 A.chpick = d => { const K = { photo: ['image/*', 'environment'], gallery: ['image/*,video/*'], doc: ['.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,application/*'], audio: ['audio/*'] }[d.k]; if (!K) return; const i = document.createElement('input'); i.type = 'file'; i.accept = K[0]; if (K[1]) i.capture = K[1]; i.multiple = d.k === 'gallery'; i.onchange = async () => { for (const f of i.files) await sendFile(f); }; $('#chmenu').hidden = true; i.click(); };
 A.chloc = () => { $('#chmenu').hidden = true; if (!navigator.geolocation) return toast('Position indisponible', 'err'); navigator.geolocation.getCurrentPosition(p => sendMsg({ loc: { lat: +p.coords.latitude.toFixed(6), lng: +p.coords.longitude.toFixed(6) } }), () => toast('Position refusée : autorisez la localisation', 'err'), { enableHighAccuracy: true, timeout: 12000 }); };
 A.chcontact = () => { const m = $('#chmenu'); if (m) m.hidden = true;
@@ -3293,8 +3337,64 @@ A.chdel = async d => { const m = S.messages.find(x => x.id === d.id); if (!m || 
 A.chdm = () => { const us = S.users.filter(u => u.active && u.id !== myMail());
   const w = modal('✉️ Discussion privée', `<p class="muted sm">Choisissez la personne avec qui discuter.</p><div class="llist">${us.map(u => `<div class="lrow"><div class="gr"><b>${esc(u.name || u.id)}</b><small>${esc(roleName(u.role))}</small></div><div class="r"><button class="btn sm" data-dmgo="${esc(u.id)}">Écrire</button></div></div>`).join('') || '<p class="muted">Aucun autre utilisateur.</p>'}</div>`);
   w.querySelectorAll('[data-dmgo]').forEach(b => b.onclick = () => { chTab = dmKey(b.dataset.dmgo); w.close(); views.chat($('#view')); }); };
+
+let chSel = null;
+const avColor = s => { let h = 0; for (const c of String(s || '?')) h = (h * 31 + c.charCodeAt(0)) % 360; return `hsl(${h} 52% 40%)`; };
+const dayLbl = ts => { const d = fmtDate(ts).slice(0, 10); return d === fmtDate(Date.now()).slice(0, 10) ? "Aujourd'hui" : d === fmtDate(Date.now() - 864e5).slice(0, 10) ? 'Hier' : d; };
+const hhmm = ts => fmtDate(ts).slice(11, 16);
+const isDM = () => chTab.startsWith('dm:');
+const SVG = { smile: '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9.5h.01M15 9.5h.01"/></svg>', clip: '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5l-8.6 8.6a5.5 5.5 0 01-7.8-7.8l9-9a3.7 3.7 0 015.2 5.2l-9 9a1.8 1.8 0 01-2.6-2.6l8.2-8.2"/></svg>', cam: '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 012-2h2l1.5-2h7L17 6h2a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg>', mic: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 15a3.5 3.5 0 003.5-3.5v-6a3.5 3.5 0 00-7 0v6A3.5 3.5 0 0012 15zm6-3.5a6 6 0 01-12 0H4.5a7.5 7.5 0 006.75 7.46V22h1.5v-3.04A7.5 7.5 0 0019.5 11.5z"/></svg>', send: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.4 20.4l17.45-7.48a1 1 0 000-1.84L3.4 3.6a.99.99 0 00-1.39.91L2 9.12c0 .5.37.93.87.99L17 12 2.87 13.88c-.5.07-.87.5-.87 1l.01 4.61c0 .71.73 1.2 1.39.91z"/></svg>', play: '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>', pause: '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>' };
+const EMO = '😀 😂 🤣 😊 😍 😘 😎 🤔 😢 😭 😡 👍 👎 👏 🙏 💪 🔥 ✅ ❌ ⚠️ ❤️ 🎉 💰 💵 📦 🛒 📞 ⏰ 👌 🙌 😅 😉 🤝 🚚 🏪 📈 📉 ✔️ 🆗 😴 🥳'.split(' ');
+function fileHtml(f, m) {
+  if (!f || !f.url) return '';
+  if (f.kind === 'image') return `<a href="${esc(f.url)}" target="_blank" rel="noopener"><img class="wimg" src="${esc(thumb(f.url))}" loading="lazy" alt="${esc(f.name || 'photo')}"></a>`;
+  if (f.kind === 'video') return `<video class="wimg" controls preload="metadata" playsinline src="${esc(f.url)}"></video>`;
+  if (f.kind === 'audio') { const d = f.dur || 0; return `<div class="vn" data-src="${esc(f.url)}" data-dur="${d}"><button type="button" class="vp">${SVG.play}</button><input type="range" min="0" max="1000" value="0"><span class="vt">${Math.floor(d / 60)}:${String(d % 60).padStart(2, '0')}</span><i class="vav" style="background:${avColor(m?.user)}">${esc((m?.user || '?')[0].toUpperCase())}</i></div>`; }
+  return `<a class="fcard" href="${esc(f.url)}" target="_blank" rel="noopener">📄 <span><b>${esc(f.name || 'Document')}</b><br><small>${f.size ? fmtSize(f.size) : ''} · Ouvrir</small></span></a>`;
+}
+function paintChat() {
+  const box = $('#chatlist'); if (!box) return; const near = box.scrollHeight - box.scrollTop - box.clientHeight < 120, L = chMsgs(); let html = '', lastDay = '';
+  L.forEach((m, i) => { const prev = L[i - 1], next = L[i + 1], me = m.uid === S.user.uid, d = dayLbl(m.ts);
+    if (d !== lastDay) { html += `<div class="wday"><span>${esc(d)}</span></div>`; lastDay = d; }
+    const first = !prev || prev.uid !== m.uid || dayLbl(prev.ts) !== d, last = !next || next.uid !== m.uid || dayLbl(next.ts) !== d, onlyImg = !m.deleted && !m.text && !m.reply && m.file && ['image', 'video'].includes(m.file.kind);
+    const inner = m.deleted ? '<i class="muted">🚫 Message supprimé</i>' : `${first && !me && !isDM() ? `<div class="wn" style="color:${avColor(m.user)}">${esc(m.user)}</div>` : ''}${m.reply ? `<div class="qt"><b>${esc(m.reply.user)}</b><br>${esc(m.reply.text)}</div>` : ''}${fileHtml(m.file, m)}${contactHtml(m.contact)}${locHtml(m.loc)}${attHtml(m.att)}${m.text ? `<div class="wt">${linkify(esc(m.text))}</div>` : ''}`;
+    html += `<div class="wrow ${me ? 'me' : ''} ${last ? 'last' : ''}"><div class="wb ${me ? 'me' : ''} ${first ? 'first' : ''} ${onlyImg ? 'oi' : ''} ${m.announce ? 'ann' : ''} ${chSel === m.id ? 'sel' : ''}" data-mid="${m.id}">${m.announce && first ? '<div class="wn" style="color:#e08a00">📢 Annonce</div>' : ''}${inner}<span class="wtm">${hhmm(m.ts)}${me && !m.deleted ? ' <b class="wck">✓</b>' : ''}</span>${m.deleted ? '' : `<div class="wact"><button data-act="chreply" data-id="${m.id}">↩ Répondre</button>${m.text ? `<button data-act="chcopy" data-id="${m.id}">📋 Copier</button>` : ''}${me || isMgr() ? `<button data-act="chdel" data-id="${m.id}">🗑 Supprimer</button>` : ''}</div>`}</div></div>`; });
+  box.innerHTML = html || '<div class="wempty">🔒 Aucun message pour le moment.<br>Écrivez le premier !</div>';
+  if (near || !box.dataset.init) { box.scrollTop = box.scrollHeight; box.dataset.init = 1; }
+}
+function paintBar() {
+  const bar = $('#chbar'); if (!bar) return; const keep = bar.querySelector('input[name=text]')?.value || '', locked = chTab === 'annonces' && !isMgr();
+  if (locked) { bar.innerHTML = '<p class="wlock">📢 Seuls l\'administrateur et le gérant publient des annonces.</p>'; return; }
+  if (chRec) { bar.innerHTML = `<div class="wa-in"><div class="wa-pill recbar"><span class="recdot"></span><b id="rect">0:00</b><span class="muted sm" style="flex:1">Enregistrement…</span><button type="button" class="ib" data-act="recx" title="Annuler">🗑</button></div><button type="button" class="wa-go" data-act="recok" title="Envoyer">${SVG.send}</button></div>`; return; }
+  bar.innerHTML = `${chReply ? `<div class="rbar"><i style="background:${avColor(chReply.user)}"></i><span><b>${esc(chReply.user)}</b><br>${esc(chReply.text)}</span><button data-act="chnoreply">✕</button></div>` : ''}${chBusy ? `<div class="rbar"><span>⏫ Envoi de <b>${esc(chBusy.name)}</b>… <b id="chpct">${chBusy.pct || 0}%</b></span></div>` : ''}
+    <div id="chmenu" class="chmenu" hidden>${[['photo', '📷', 'Photo'], ['gallery', '🖼️', 'Galerie / vidéo'], ['doc', '📄', 'Document'], ['audio', '🎵', 'Audio'], ['contact', '👤', 'Contact'], ['loc', '📍', 'Position']].map(([k, i, t]) => `<button type="button" data-act="${k === 'contact' ? 'chcontact' : k === 'loc' ? 'chloc' : 'chpick'}" data-k="${k}"><span>${i}</span>${t}</button>`).join('')}</div>
+    <div id="chemo" class="chemo" hidden>${EMO.map(e => `<button type="button" data-emo="${e}">${e}</button>`).join('')}</div>
+    <form id="chatf" class="wa-in"><div class="wa-pill"><button type="button" class="ib" data-act="chemo" title="Émojis">${SVG.smile}</button><input name="text" placeholder="${chTab === 'admin' && !isMgr() ? 'Message à l\'administration' : 'Message'}" autocomplete="off" value="${esc(keep)}"><button type="button" class="ib" data-act="chmenu" title="Joindre">${SVG.clip}</button><button type="button" class="ib cam" data-act="chpick" data-k="photo" title="Photo">${SVG.cam}</button></div><button type="button" class="wa-go" id="chact" title="Message vocal">${SVG.mic}</button></form>`;
+  const f = $('#chatf', bar), inp = f.text, go = $('#chact', bar), sync = () => { const has = !!inp.value.trim(); go.innerHTML = has ? SVG.send : SVG.mic; go.title = has ? 'Envoyer' : 'Message vocal'; f.classList.toggle('typing', has); };
+  inp.addEventListener('input', sync); sync(); go.onclick = () => inp.value.trim() ? f.requestSubmit() : A.recgo();
+  bar.querySelectorAll('[data-emo]').forEach(b => b.onclick = () => { inp.value += b.dataset.emo; inp.focus(); sync(); });
+  f.addEventListener('submit', e => { e.preventDefault(); const t = inp.value.trim(); if (!t) return; inp.value = ''; sync(); sendMsg({ text: t }); });
+}
+A.chemo = () => { const m = $('#chemo'); if (m) { m.hidden = !m.hidden; const mm = $('#chmenu'); if (mm) mm.hidden = true; } };
+A.chmenu = () => { const m = $('#chmenu'); if (m) { m.hidden = !m.hidden; const e = $('#chemo'); if (e) e.hidden = true; } };
+A.chcopy = async d => { const m = S.messages.find(x => x.id === d.id); try { await navigator.clipboard.writeText(m?.text || ''); toast('Message copié'); } catch { toast('Copie impossible', 'err'); } };
+/* sélection d'un message + lecteur vocal */
+let vnA = null, vnB = null;
+document.addEventListener('click', e => {
+  const vp = e.target.closest('.vn .vp');
+  if (vp) { const w = vp.closest('.vn'), r = w.querySelector('input'), t = w.querySelector('.vt'), dur = +w.dataset.dur || 0, fm = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+    if (vnA && vnB === w) { vnA.paused ? vnA.play() : vnA.pause(); return; }
+    if (vnA) { vnA.pause(); vnB.querySelector('.vp').innerHTML = SVG.play; }
+    vnA = new Audio(w.dataset.src); vnB = w; const btn = vp;
+    vnA.onplay = () => btn.innerHTML = SVG.pause; vnA.onpause = () => btn.innerHTML = SVG.play; vnA.onended = () => { btn.innerHTML = SVG.play; r.value = 0; t.textContent = fm(dur); };
+    vnA.ontimeupdate = () => { const d = vnA.duration && isFinite(vnA.duration) ? vnA.duration : dur; if (d) r.value = Math.round(vnA.currentTime / d * 1000); t.textContent = fm(vnA.currentTime); };
+    r.oninput = () => { const d = vnA.duration && isFinite(vnA.duration) ? vnA.duration : dur; if (d) vnA.currentTime = r.value / 1000 * d; };
+    vnA.play().catch(() => toast('Lecture impossible', 'err')); return; }
+  const wb = e.target.closest('#chatlist .wb'); if (!wb || e.target.closest('a,button,input,video,audio,.vn')) return;
+  chSel = chSel === wb.dataset.mid ? null : wb.dataset.mid; $('#chatlist').querySelectorAll('.wb.sel').forEach(x => x.classList.remove('sel')); if (chSel) wb.classList.add('sel');
+});
 views.chat = el => {
-  const tabs = `<div class="chips">${CHS.map(([k, t]) => `<button class="chip ${chTab === k ? 'on' : ''}" data-act="chtab" data-k="${k}">${t}</button>`).join('')}${dmKeys().map(k => `<button class="chip ${chTab === k ? 'on' : ''}" data-act="chtab" data-k="${esc(k)}">${esc(chName(k))}</button>`).join('')}<button class="chip" data-act="chdm">+ Privé</button></div>`;
+  const tabs = `<div class="wtabs">${CHS.map(([k, t]) => `<button class="chip ${chTab === k ? 'on' : ''}" data-act="chtab" data-k="${k}">${t}</button>`).join('')}${dmKeys().map(k => `<button class="chip ${chTab === k ? 'on' : ''}" data-act="chtab" data-k="${esc(k)}">${esc(chName(k))}</button>`).join('')}<button class="chip" data-act="chdm">+ Privé</button></div>`;
   if (chTab === 'polls') {
     live.fn = null;
     el.innerHTML = page('Sondages', isMgr() ? `<button class="btn" data-act="pollform">${ic('plus')} Nouveau sondage</button>` : '', tabs + [...S.polls].sort((a, b) => b.ts - a.ts).map(p => {
@@ -3305,10 +3405,12 @@ views.chat = el => {
     }).join('') || '<p class="muted">Aucun sondage.</p>');
     return;
   }
-  el.innerHTML = page('Chat', '', `${tabs}<div class="chatbox"><div id="chatlist" class="chatlist"></div><div id="chbar"></div></div>`);
+  const nm = chName(chTab).replace('✉️ ', ''), sub = isDM() ? 'Discussion privée' : `${S.users.filter(u => u.active).length || 1} membre(s) · ${chTab === 'annonces' ? 'annonces de la direction' : 'salon de l\'équipe'}`;
+  el.innerHTML = `<div class="wa">${tabs}<div class="wahead"><i style="background:${avColor(nm)}">${esc(nm[0]?.toUpperCase() || '?')}</i><div><b>${esc(nm)}</b><small>${esc(sub)}</small></div></div><div id="chatlist" class="wlist"></div><div id="chbar" class="wbar"></div></div>`;
   live.fn = paintChat; paintChat(); paintBar();
 };
-A.chtab = d => { chTab = d.k; chReply = null; views.chat($('#view')); };
+A.chtab = d => { chTab = d.k; chReply = null; chSel = null; views.chat($('#view')); };
+
 
 A.pollform = () => form('Nouveau sondage', `${fld('Question', 'q', '', 'text', 'required')}<label>Options (une par ligne, 2 minimum)<textarea name="opts" rows="4" required></textarea></label>`, async v => {
   const options = v.opts.split('\n').map(s => s.trim()).filter(Boolean); if (options.length < 2) throw new Error('Ajoutez au moins 2 options');
@@ -3933,7 +4035,8 @@ views.settings = el => {
       <label>Jeton du bot<input id="tgtok" name="tgToken" type="password" autocomplete="off" value="${esc(s.tgToken || '')}" placeholder="123456:ABC…"></label>
       <label>Numéro de discussion (chat id)<input id="tgchat" name="tgChat" inputmode="numeric" value="${esc(s.tgChat || '')}" placeholder="ex. 123456789 (ou -100… pour un groupe)"></label>
       ${fld('Une vente est « grosse » à partir de (USD)', 'tgBig', s.tgBig || 100, 'number', 'step="any" min="0.01"')}
-      <b class="sm">Événements qui déclenchent une alerte</b><div class="chkgrid">${[['sale', 'Grosse vente'], ['stock', 'Rupture / stock faible'], ['cancel', 'Annulation de vente'], ['ret', 'Retour / remboursement'], ['ecart', 'Écart de caisse']].map(([k, l]) => `<label class="chk"><input type="checkbox" name="ev_${k}" ${(s.tgEv ? s.tgEv[k] !== false : true) ? 'checked' : ''}> ${l}</label>`).join('')}</div>
+      <b class="sm">Opérations qui déclenchent une alerte</b><div class="row wrap"><button type="button" class="btn ghost sm" data-act="tgall" data-v="1">Tout cocher</button><button type="button" class="btn ghost sm" data-act="tgall" data-v="0">Tout décocher</button><button type="button" class="btn ghost sm" data-act="tgess">L'essentiel</button></div><div class="chkgrid">${TG_EV.map(([k, l]) => `<label class="chk"><input type="checkbox" name="ev_${k}" ${tgEvOn(k) ? 'checked' : ''}> ${l}</label>`).join('')}</div>
+      <label class="chk"><input type="checkbox" name="tgNoSelf" ${s.tgNoSelf ? 'checked' : ''}> Ne pas m'alerter de mes propres actions (administrateur)</label>
       <div class="row wrap"><button class="btn">Enregistrer</button><button type="button" class="btn ghost" data-act="tgtest">Envoyer un message de test</button></div></form>
     <div class="card"><h3>Promotions datées</h3><button class="btn ghost sm" data-act="promoadd">+ Nouvelle promotion</button>${(s.promos || []).map((p, i) => `<div class="mi"><span><b>${esc(p.name)}</b> −${p.pct}% — ${esc(p.from)} → ${esc(p.to)} ${p.pid ? '· ' + esc(S.products.find(x => x.id === p.pid)?.name || 'produit') : '· tous produits'}</span><button class="del" data-act="promodel" data-i="${i}">${ic('trash', 16)}</button></div>`).join('') || '<p class="muted sm">Aucune promotion.</p>'}</div>`; }
   if (tab === 'notes') {
