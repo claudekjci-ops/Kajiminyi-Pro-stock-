@@ -862,12 +862,13 @@ const shopUrl = () => location.href.replace(/[#?].*$/, '').replace(/[^/]*$/, '')
 const shopVisible = p => sellable(p) && !(S.settings.shopHide || []).includes(p.id);
 const hsh = str => { let h = 5381; for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0; return String(h) + ':' + str.length; };
 const thumbCache = new Map();
-function thumb(src) {
+function thumb(src, max = 200) {
   if (!src) return Promise.resolve('');
-  if (thumbCache.has(src)) return Promise.resolve(thumbCache.get(src));
+  const ck = max + src;
+  if (thumbCache.has(ck)) return Promise.resolve(thumbCache.get(ck));
   return new Promise(res => {
     const im = new Image();
-    im.onload = () => { try { const k = Math.min(1, 160 / Math.max(im.width, im.height)), c = document.createElement('canvas'); c.width = Math.max(1, Math.round(im.width * k)); c.height = Math.max(1, Math.round(im.height * k)); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); const o = c.toDataURL('image/jpeg', 0.6); thumbCache.set(src, o); res(o); } catch { res(src.length < 30000 ? src : ''); } };
+    im.onload = () => { try { const k = Math.min(1, max / Math.max(im.width, im.height)), c = document.createElement('canvas'); c.width = Math.max(1, Math.round(im.width * k)); c.height = Math.max(1, Math.round(im.height * k)); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); const o = c.toDataURL('image/jpeg', 0.6); thumbCache.set(ck, o); res(o); } catch { res(src.length < 30000 ? src : ''); } };
     im.onerror = () => res(''); im.src = src;
   });
 }
@@ -877,7 +878,7 @@ function shopDoc(p) {
 }
 function shopCfg() {
   const s = S.settings, ids = new Set(S.products.filter(shopVisible).map(p => p.cat));
-  return { open: !!s.shopOn, name: s.shop || 'Boutique', logo: s.logo || '', addr: s.addr || '', phone: s.phone || '', wa: waPh2(s.shopWa || s.phone || ''), momo: s.shopMomo || '', mark: Math.max(0, Math.min(100, +s.shopMark || 0)), deliv: s.shopDeliv || '', msg: s.shopMsg || '', rate: s.rate || 1, cur: s.mainCur === 'USD' ? 'USD' : 'CDF', cats: S.categories.filter(c => ids.has(c.id)).map(c => ({ id: c.id, name: c.name })) };
+  return { open: !!s.shopOn, name: s.shop || 'Boutique', logo: s.logo || '', addr: s.addr || '', phone: s.phone || '', wa: waPh2(s.shopWa || s.phone || ''), momo: s.shopMomo || '', mark: Math.max(0, Math.min(100, +s.shopMark || 0)), ask: s.shopAsk !== false, deliv: s.shopDeliv || '', msg: s.shopMsg || '', rate: s.rate || 1, cur: s.mainCur === 'USD' ? 'USD' : 'CDF', cats: S.categories.filter(c => ids.has(c.id)).map(c => ({ id: c.id, name: c.name })) };
 }
 let shopBusy = false, shopT = null;
 const SHOPKEY = 'ksp_shopsync';
@@ -890,7 +891,7 @@ async function shopSync(force) {
   try {
     if (force) { const snap = await F.getDocs(F.collection(F.db, 'shop')); known = {}; snap.docs.forEach(d => { known[d.id] = ''; }); }
     const want = {};
-    if (S.settings.shopOn) for (const p of S.products) { if (!shopVisible(p)) continue; const d = shopDoc(p); d.photo = await thumb(p.photo); want[p.id] = d; }
+    if (S.settings.shopOn) for (const p of S.products) { if (!shopVisible(p)) continue; const d = shopDoc(p); d.photo = await thumb(p.webPhoto || p.photo, p.webPhoto ? 320 : 200); want[p.id] = d; }
     want._cfg = shopCfg();
     const ops = [];
     for (const id in want) { const h = hsh(JSON.stringify(want[id])); if (known[id] !== h) ops.push({ id, data: { ...want[id], ts: Date.now() }, h }); }
@@ -919,16 +920,18 @@ function ordWatch() {
 const ordLink = (o, txt) => `https://wa.me/${waPh2(o.phone)}?text=${encodeURIComponent(txt)}`;
 let otab = 'new';
 views.orders = el => {
-  const L = S.orders.slice().sort((a, b) => b.ts - a.ts), cnt = { new: L.filter(o => o.status === 'new').length, run: L.filter(o => ['confirmed', 'ready'].includes(o.status)).length, done: L.filter(o => ['done', 'cancelled'].includes(o.status)).length };
-  const tabs = `<div class="chips">${[['new', 'Nouvelles'], ['run', 'En cours'], ['done', 'Terminées'], ['cat', 'Catalogue en ligne']].map(([k, t]) => `<button class="chip ${otab === k ? 'on' : ''}" data-act="ordtab" data-k="${k}">${t}${cnt[k] != null ? ' (' + cnt[k] + ')' : ''}</button>`).join('')}</div>`;
+  const L = S.orders.slice().sort((a, b) => b.ts - a.ts), cnt = { new: L.filter(o => o.status === 'new').length, run: L.filter(o => ['confirmed', 'ready'].includes(o.status)).length, done: L.filter(o => ['done', 'cancelled'].includes(o.status)).length, liv: livList().length };
+  const tabs = `<div class="chips">${[['new', 'Nouvelles'], ['run', 'En cours'], ['liv', 'Livraisons'], ['done', 'Terminées'], ['cat', 'Catalogue en ligne'], ['vis', 'Visiteurs']].map(([k, t]) => `<button class="chip ${otab === k ? 'on' : ''}" data-act="ordtab" data-k="${k}">${t}${cnt[k] != null ? ' (' + cnt[k] + ')' : ''}</button>`).join('')}</div>`;
   const on = !!S.settings.shopOn;
   const head = `<div class="card ${on ? '' : 'warnbox'}"><div class="row sp"><div><b>${on ? '🟢 Boutique en ligne ouverte' : '🔴 Boutique en ligne fermée'}</b><br><small class="muted">${on ? esc(shopUrl()) : "Activez-la dans Paramètres → Boutique en ligne."}</small></div><div class="row">${on ? `<button class="btn sm" data-act="shoplink">Lien &amp; QR</button>` : ''}${isAdmin() ? `<button class="btn ghost sm" data-act="gotoshop">Réglages</button>` : ''}</div></div></div>`;
   let body = '';
   if (otab === 'cat') {
     const hide = new Set(S.settings.shopHide || []), t = +localStorage.getItem(SHOPKEY + '_t') || 0;
     body = `<div class="card"><div class="row sp"><div><b>Produits visibles sur la boutique</b><br><small class="muted">Dernière mise à jour du catalogue : ${t ? fmtDate(t) : 'jamais'}. Les prix, photos et disponibilités se mettent à jour tout seuls.</small></div><button class="btn sm" data-act="shoppub">Publier maintenant</button></div></div>
-    <div class="llist">${S.products.slice().sort((a, b) => a.name.localeCompare(b.name)).map(p => { const vis = sellable(p) && !hide.has(p.id), why = p.suspended ? 'Vente suspendue' : expState(p) === 'expired' ? 'Expiré' : hide.has(p.id) ? 'Masqué' : (p.qty > 0 ? 'En ligne' : 'En ligne · épuisé');
-      return `<div class="lrow">${p.photo ? `<img class="th" src="${p.photo}" alt="">` : `<div class="ph-ic th">${esc(p.name[0])}</div>`}<div class="jm"><b>${esc(p.name)}</b><small>${esc(catName(p.cat))} · ${usd(unitPrice(p, allUnits(p)[0]))}</small></div><div class="jr"><span class="badge ${vis ? '' : 'gray'}">${why}</span></div><div class="ac"><label class="chk"><input type="checkbox" data-act="shopvis" data-id="${p.id}" ${hide.has(p.id) ? '' : 'checked'} ${p.suspended || expState(p) === 'expired' ? 'disabled' : ''}> Visible</label></div></div>`; }).join('') || '<p class="muted">Aucun produit.</p>'}</div>`;
+    <div class="llist">${S.products.slice().sort((a, b) => a.name.localeCompare(b.name)).map(p => { const vis = sellable(p) && !hide.has(p.id), wp = p.webPhoto || p.photo, why = p.suspended ? 'Vente suspendue' : expState(p) === 'expired' ? 'Expiré' : hide.has(p.id) ? 'Masqué' : (p.qty > 0 ? 'En ligne' : 'En ligne · épuisé');
+      return `<div class="lrow">${wp ? `<img class="th" src="${wp}" alt="">` : `<div class="ph-ic th">${esc(p.name[0])}</div>`}<div class="jm"><b>${esc(p.name)}</b><small>${esc(catName(p.cat))} · ${usd(unitPrice(p, allUnits(p)[0]))}</small></div><div class="jr"><span class="badge ${vis ? '' : 'gray'}">${why}</span></div><div class="ac"><button class="btn ghost sm" data-act="webph" data-id="${p.id}">📷 ${p.webPhoto ? 'Changer' : 'Photo boutique'}</button>${p.webPhoto ? `<button class="btn ghost sm del" data-act="webphx" data-id="${p.id}" title="Retirer la photo boutique">✖</button>` : ''}<label class="chk"><input type="checkbox" data-act="shopvis" data-id="${p.id}" ${hide.has(p.id) ? '' : 'checked'} ${p.suspended || expState(p) === 'expired' ? 'disabled' : ''}> Visible</label></div></div>`; }).join('') || '<p class="muted">Aucun produit.</p>'}</div>`;
+  } else if (otab === 'liv') { body = livHtml();
+  } else if (otab === 'vis') { body = visHtml();
   } else {
     const rows = L.filter(o => otab === 'new' ? o.status === 'new' : otab === 'run' ? ['confirmed', 'ready'].includes(o.status) : ['done', 'cancelled'].includes(o.status));
     body = rows.map(o => { const st = SHOP_ST[o.status] || ['?', 'gray'], tel = String(o.phone || '').replace(/[^\d+]/g, '');
@@ -944,7 +947,7 @@ views.orders = el => {
   }
   el.innerHTML = page('Commandes en ligne', '', head + tabs + body);
 };
-A.ordtab = d => { otab = d.k; views.orders($('#view')); };
+A.ordtab = d => { otab = d.k; if (d.k === 'vis') loadVisits(true); views.orders($('#view')); };
 A.ordst = async d => {
   const o = S.orders.find(x => x.id === d.id); if (!o) return; const nm = SHOP_ST[d.st][0];
   if (d.st === 'cancelled' && !(await confirmBox(`Refuser / annuler la commande <b>${esc(o.no)}</b> de ${esc(o.name)} ?`, 'Oui, annuler'))) return;
@@ -974,7 +977,7 @@ A.shoplink = () => {
 document.addEventListener('submit', e => {
   if (e.target.id !== 'shf') return; e.preventDefault(); if (!isAdmin()) return;
   const v = Object.fromEntries(new FormData(e.target));
-  const b = batch(); b.merge('meta', 'settings', { shopOn: !!v.shopOn, shopWa: (v.shopWa || '').trim(), shopMomo: (v.shopMomo || '').trim(), shopMark: Math.max(0, Math.min(100, +v.shopMark || 0)), shopDeliv: (v.shopDeliv || '').trim(), shopMsg: (v.shopMsg || '').trim() });
+  const b = batch(); b.merge('meta', 'settings', { shopOn: !!v.shopOn, shopWa: (v.shopWa || '').trim(), shopMomo: (v.shopMomo || '').trim(), shopMark: Math.max(0, Math.min(100, +v.shopMark || 0)), shopAsk: !!v.shopAsk, shopDeliv: (v.shopDeliv || '').trim(), shopMsg: (v.shopMsg || '').trim() });
   jr(b, 'Paramètres', 'Boutique en ligne ' + (v.shopOn ? 'ouverte' : 'fermée') + ' (par ' + who() + ')'); b.commit().catch(() => {}); toast('Boutique enregistrée');
   setTimeout(async () => { const n = await shopSync(true); if (n !== false) toast('Catalogue publié'); }, 1500);
 });
@@ -982,6 +985,95 @@ A.shopcopy = () => { navigator.clipboard?.writeText(shopUrl()).then(() => toast(
 
 window.__shopTick = () => { ordWatch(); try { if (S.settings.shopOn || localStorage.getItem(SHOPKEY)) shopSched(); } catch { /* */ } };
 window.__shopSync = shopSync;
+
+// ======================= LIVRAISONS + VISITEURS + PHOTOS BOUTIQUE (v15) =======================
+const livList = () => S.sales.filter(s => s.deliv?.st === 'pending' && s.status !== 'cancelled').sort((a, b) => a.ts - b.ts);
+function livHtml() {
+  const L = livList(), done = S.sales.filter(s => s.deliv?.st === 'done' && s.status !== 'cancelled').sort((a, b) => (b.deliv.doneTs || 0) - (a.deliv.doneTs || 0)).slice(0, 15);
+  const card = (s, p) => {
+    const cl = S.clients.find(c => c.id === s.clientId), tel = String(s.clientPhone || cl?.phone || '').replace(/[^\d+]/g, '');
+    return `<div class="card ord"><div class="row sp"><b>${esc(s.no)}</b><span class="badge ${p ? 'warn' : ''}">${p ? '🚚 À livrer' : '✅ Livrée'}</span></div>
+      <small class="muted">${fmtDate(s.ts)}${p ? '' : ' → livrée ' + fmtDate(s.deliv.doneTs || s.ts)} · ${esc(s.userName || '')}</small>
+      <p style="margin:8px 0 2px"><b>${esc(s.clientName || 'Client')}</b>${tel ? ' · ' + esc(tel) : ''}</p>${s.deliv.addr ? `<small>📍 ${esc(s.deliv.addr)}</small>` : ''}
+      <div class="ordl">${(s.items || []).map(i => `<div class="mi"><span>${esc(i.qty)} × ${esc(i.name)}${i.unit ? ' <small class="muted">(' + esc(i.unit) + ')</small>' : ''}</span><b>${fmAt(i.price * i.qty, s.rate)}</b></div>`).join('')}</div>
+      <div class="mi"><b>${p ? 'À encaisser à la livraison' : 'Encaissé'}</b><b>${fmAt(s.total, s.rate)}</b></div>
+      <div class="row wrap" style="margin-top:8px">${p ? `<button class="btn sm" data-act="livdone" data-id="${s.id}">✅ Livrée et encaissée</button><button class="btn ghost sm del" data-act="cancelsale" data-id="${s.id}">↩️ Annuler (retour en stock)</button>` : ''}${tel ? `<a class="btn ghost sm" href="tel:${tel}">📞 Appeler</a>` : ''}<button class="btn ghost sm" data-act="receipt" data-id="${s.id}">Reçu</button></div></div>`;
+  };
+  return `<div class="card"><b>🚚 Ventes en livraison</b><p class="muted sm" style="margin:4px 0 0">Le stock sort au moment de la vente, mais <b>rien n'entre en caisse</b> et <b>aucune dette client n'est créée</b> tant que la livraison n'est pas faite. Pour en créer une : Vente → mode de paiement « 🚚 Livraison ». À la remise, touchez « Livrée et encaissée ».</p><p style="margin:8px 0 0">En attente : <b>${L.length}</b> · à encaisser : <b>${usd(L.reduce((a, s) => a + s.total, 0))}</b></p></div>${L.map(s => card(s, true)).join('') || '<div class="card"><p class="muted">Aucune livraison en attente.</p></div>'}${done.length ? `<h4 style="margin:16px 4px 8px">Livrées récemment</h4>${done.map(s => card(s, false)).join('')}` : ''}`;
+}
+A.livdone = d => {
+  const s = S.sales.find(x => x.id === d.id); if (!s || s.deliv?.st !== 'pending' || s.status === 'cancelled') return; const sx = window.__sx || {};
+  const opts = [['cdf', 'Espèces CDF'], ['usd', 'Espèces USD'], ['mmc', 'Mobile Money CDF'], ['mm', 'Mobile Money USD'], ['bank', 'Banque USD']].filter(([k]) => !sx.pmAllowed || sx.pmAllowed(k));
+  form('Encaisser la livraison ' + s.no, `<p>Montant à encaisser : <b>${fmAt(s.total, s.rate)}</b>${s.clientName ? '<br>Client : ' + esc(s.clientName) : ''}</p><label>Mode d'encaissement<select name="m">${opts.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label>`, v => {
+    const m = v.m; if ((m === 'usd' || m === 'cdf') && sx.curSession && !sx.curSession()) return toast("Ouvrez la caisse (menu Caisse) avant d'encaisser des espèces", 'err');
+    const cur = S.sales.find(x => x.id === s.id); if (!cur || cur.deliv?.st !== 'pending') return;
+    const amt = m === 'cdf' || m === 'mmc' ? Math.round(s.total * s.rate) : r00(s.total), ACC = { usd: 'USD', cdf: 'CDF', mm: 'MM', mmc: 'MMC', bank: 'BANK' };
+    const b = batch(); b.upd('sales', s.id, { pay: { ...(s.pay || {}), liv: 0, [m]: amt }, deliv: { ...s.deliv, st: 'done', doneTs: Date.now(), doneBy: who(), via: m } });
+    sx.cashop(b, 'sale', ACC[m], amt, 'Livraison encaissée ' + s.no, s.id);
+    jr(b, 'Vente', `Livraison encaissée ${s.no}${s.clientName ? ' — ' + s.clientName : ''}`, s.total, 'USD', '', s.id);
+    b.commit(); toast('Livraison encaissée'); setTimeout(() => { if (S.route === 'orders') views.orders($('#view')); }, 200);
+  });
+};
+// ---- photos boutique : séparées de celles de l'application ----
+const webResize = (file, max, q) => new Promise((res, rej) => {
+  const u = URL.createObjectURL(file), im = new Image();
+  im.onload = () => { try { const k = Math.min(1, max / Math.max(im.width, im.height)), c = document.createElement('canvas'); c.width = Math.max(1, Math.round(im.width * k)); c.height = Math.max(1, Math.round(im.height * k)); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); URL.revokeObjectURL(u); res(c.toDataURL('image/jpeg', q)); } catch (e) { rej(e); } };
+  im.onerror = () => { URL.revokeObjectURL(u); rej(new Error('img')); }; im.src = u;
+});
+A.webph = d => {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.style.display = 'none'; document.body.appendChild(inp);
+  inp.onchange = async () => {
+    const f = inp.files[0]; inp.remove(); if (!f) return;
+    try { const url = await webResize(f, 360, 0.72), b = batch(); b.upd('products', d.id, { webPhoto: url }); b.commit(); toast('Photo boutique enregistrée (invisible dans l\'application)'); setTimeout(() => { if (S.route === 'orders') views.orders($('#view')); }, 250); setTimeout(() => shopSync(false), 1500); }
+    catch { toast('Photo illisible', 'err'); }
+  };
+  inp.click();
+};
+A.webphx = d => { const b = batch(); b.upd('products', d.id, { webPhoto: '' }); b.commit(); toast('Photo boutique retirée'); setTimeout(() => { if (S.route === 'orders') views.orders($('#view')); }, 250); setTimeout(() => shopSync(false), 1500); };
+// ---- visiteurs ----
+const VIS = { loaded: 0, rows: [], busy: false, err: '', month: '' };
+async function loadVisits(force) {
+  if (VIS.busy || (!force && Date.now() - VIS.loaded < 60000)) return; VIS.busy = true;
+  try { const snap = await F.getDocs(F.query(F.collection(F.db, 'visits'), F.orderBy('ts', 'desc'), F.limit(8000))); VIS.rows = snap.docs.map(d => d.data()); VIS.loaded = Date.now(); VIS.err = ''; }
+  catch (e) { VIS.err = e.code || e.message || 'erreur'; } finally { VIS.busy = false; }
+  if (S.route === 'orders' && otab === 'vis') views.orders($('#view'));
+}
+const mkey = t => { const d = new Date(t); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); };
+const MFR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+const mlabel = k => MFR[+k.slice(5) - 1] + ' ' + k.slice(0, 4);
+function visStats(m) {
+  const rows = VIS.rows.filter(r => mkey(r.ts) === m), vis = rows.filter(r => r.kind === 'visit'), uniq = new Set(vis.map(r => r.vid));
+  const orders = S.orders.filter(o => mkey(o.ts) === m);
+  return { rows, vis, uniq, orders };
+}
+function visHtml() {
+  if (!VIS.loaded && !VIS.busy) loadVisits(true);
+  const cur = mkey(Date.now()); VIS.month = VIS.month || cur;
+  const months = [...new Set([cur, ...VIS.rows.map(r => mkey(r.ts))])].sort().reverse();
+  if (!months.includes(VIS.month)) VIS.month = cur;
+  const head = `<div class="card"><div class="row sp"><div><b>👥 Visiteurs de la boutique</b><br><small class="muted">${VIS.busy ? 'Chargement…' : VIS.loaded ? 'Mis à jour à ' + fmtDate(VIS.loaded) : ''}</small></div><div class="row"><select data-act="vismonth" id="vism">${months.map(k => `<option value="${k}" ${k === VIS.month ? 'selected' : ''}>${mlabel(k)}</option>`).join('')}</select><button class="btn ghost sm" data-act="visrefresh">↻</button></div></div></div>`;
+  if (VIS.err) return head + `<div class="card warnbox"><b>Lecture impossible</b><p class="muted sm">${esc(VIS.err)} — publiez les dernières règles Firebase (fichier firestore.rules), puis actualisez.</p></div>`;
+  const st = visStats(VIS.month), n = st.uniq.size, days = new Date(+VIS.month.slice(0, 4), +VIS.month.slice(5), 0).getDate();
+  const perDay = Array(days).fill(0); st.vis.forEach(r => { perDay[new Date(r.ts).getDate() - 1]++; });
+  const mx = Math.max(1, ...perDay);
+  const adds = {}; st.rows.filter(r => r.kind === 'add').forEach(r => { adds[r.pn || r.pid] = (adds[r.pn || r.pid] || 0) + 1; });
+  const top = Object.entries(adds).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  // identification : prénom donné par le visiteur ou nom d'une commande passée avec le même appareil
+  const names = {}; VIS.rows.slice().sort((a, b) => a.ts - b.ts).forEach(r => { if (r.name) names[r.vid] = r.name; });
+  S.orders.forEach(o => { if (o.vid) names[o.vid] = o.name; });
+  const ordBy = {}; S.orders.forEach(o => { if (o.vid) (ordBy[o.vid] ||= []).push(o); });
+  const by = {}; st.vis.forEach(r => { const x = by[r.vid] ||= { vid: r.vid, n: 0, last: 0 }; x.n++; x.last = Math.max(x.last, r.ts); });
+  const idd = Object.values(by).filter(x => names[x.vid]).sort((a, b) => b.last - a.last);
+  const trend = months.slice(0, 6).reverse().map(k => [k, new Set(VIS.rows.filter(r => r.kind === 'visit' && mkey(r.ts) === k).map(r => r.vid)).size]), tm = Math.max(1, ...trend.map(x => x[1]));
+  const kp = (t, v, s) => `<div class="card" style="flex:1;min-width:130px;margin:0"><small class="muted">${t}</small><div style="font-size:1.6rem;font-weight:800">${v}</div><small class="muted">${s || ''}</small></div>`;
+  return head + `<div class="row wrap" style="gap:10px;margin-bottom:10px">${kp('Visites', st.vis.length, 'ouvertures de la boutique')}${kp('Visiteurs différents', n, 'appareils uniques')}${kp('Commandes', st.orders.length, n ? Math.round(st.orders.length / n * 100) + ' % des visiteurs ont commandé' : '')}${kp('Identifiés', idd.length, 'prénom ou commande')}</div>
+  <div class="card"><b>Visites par jour</b><div style="display:flex;align-items:flex-end;gap:2px;height:90px;margin-top:10px">${perDay.map((v, i) => `<div title="${i + 1} : ${v}" style="flex:1;background:var(--brand,#0A8A5A);border-radius:3px 3px 0 0;height:${Math.max(2, Math.round(v / mx * 100))}%;opacity:${v ? 1 : .25}"></div>`).join('')}</div><div class="row sp muted"><small>1</small><small>${Math.round(days / 2)}</small><small>${days}</small></div></div>
+  <div class="card"><b>Visiteurs différents sur 6 mois</b>${trend.map(([k, v]) => `<div class="row" style="gap:8px;margin-top:6px"><small style="width:96px">${mlabel(k)}</small><div style="flex:1;background:var(--bd,#e2e8e5);border-radius:6px;overflow:hidden"><div style="width:${Math.round(v / tm * 100)}%;background:#2E86AB;height:14px"></div></div><b>${v}</b></div>`).join('')}</div>
+  <div class="card"><b>Produits les plus ajoutés au panier</b>${top.length ? top.map(([k, v]) => `<div class="mi"><span>${esc(k)}</span><b>${v}</b></div>`).join('') : '<p class="muted sm">Pas encore de données.</p>'}</div>
+  <div class="card"><b>Visiteurs identifiés</b><p class="muted sm" style="margin:2px 0 8px">Seuls les visiteurs qui ont donné leur prénom ou passé commande ont un nom. Les autres restent anonymes.</p>${idd.map(x => { const od = ordBy[x.vid] || [], ph = od[0]?.phone ? String(od[0].phone).replace(/[^\d+]/g, '') : ''; return `<div class="mi"><span><b>${esc(names[x.vid])}</b><br><small class="muted">${x.n} visite(s) · dernière : ${fmtDate(x.last)}${od.length ? ' · ' + od.length + ' commande(s)' : ''}</small></span>${ph ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="https://wa.me/${waPh2(ph)}">WhatsApp</a>` : ''}</div>`; }).join('') || '<p class="muted sm">Aucun visiteur identifié ce mois-ci.</p>'}</div>`;
+}
+A.vismonth = (d, el) => { VIS.month = el?.value || VIS.month; views.orders($('#view')); };
+A.visrefresh = () => { loadVisits(true); };
 
 // ======================= LOTS 2-4 : écrans =======================
 const zkpi = (l, v, c = '') => `<div class="kpi ${c}"><small>${l}</small><b>${v}</b></div>`;
@@ -1689,7 +1781,7 @@ A.dper = d => { dp = d.p; views.dashboard($('#view')); };
 let cart = [], sq = '', scat = '', stab = 'new';
 const freshCk = () => ({ disc: 0, client: '', mode: pmAllowed('cdf') && S.settings.mainCur !== 'USD' ? 'cdf' : (pmAllowed('usd') ? 'usd' : (['cdf', 'mmc', 'mm', 'bank'].find(pmAllowed) || 'credit')), cdf: '', usd: '', mmc: '', mm: '', bank: '', credit: '', due: '', pname: '', bonus: [] });
 let ck = null;
-const MODES = () => [['cdf', 'Espèces CDF'], ['usd', 'Espèces USD'], ['mmc', 'Mobile Money CDF'], ['mm', 'Mobile Money USD'], ['bank', 'Banque USD'], ['mixte', 'Paiement mixte'], ['credit', 'Crédit']].filter(([k]) => pmAllowed(k));
+const MODES = () => [['cdf', 'Espèces CDF'], ['usd', 'Espèces USD'], ['mmc', 'Mobile Money CDF'], ['mm', 'Mobile Money USD'], ['bank', 'Banque USD'], ['mixte', 'Paiement mixte'], ['liv', '🚚 Livraison (payer à la remise)'], ['credit', 'Crédit']].filter(([k]) => pmAllowed(k));
 
 const cartLines = () => cart.map(c => {
   const p = S.products.find(x => x.id === c.pid); if (!p) return null;
@@ -1699,15 +1791,16 @@ const cartLines = () => cart.map(c => {
 const totals = L => { const sub = sum(L, x => x.sub), man = Math.min(100, Math.max(0, num(ck?.disc))), au = autoDisc(L, S.clients.find(c => c.id === ck?.client)), discAmt = Math.min(sub, r2(sub * man / 100 + au.amt)); return { sub, disc: sub ? r2(discAmt / sub * 100) : 0, discAmt, total: r2(sub - discAmt), autoAmt: au.amt, autoLabel: au.label }; };
 const creditUSD = v => S.settings.mainCur === 'USD' ? num(v) : num(v) / S.settings.rate;
 const payAmounts = total => {
-  const r = S.settings.rate, z = { usd: 0, cdf: 0, mm: 0, mmc: 0, bank: 0, credit: 0 };
+  const r = S.settings.rate, z = { usd: 0, cdf: 0, mm: 0, mmc: 0, bank: 0, credit: 0, liv: 0 };
   switch (ck.mode) {
     case 'cdf': case 'mmc': return { ...z, [ck.mode]: Math.round(total * r) };
     case 'usd': case 'mm': case 'bank': return { ...z, [ck.mode]: r00(total) };
     case 'credit': return { ...z, credit: total };
-    default: return { usd: num(ck.usd), cdf: num(ck.cdf), mm: num(ck.mm), mmc: num(ck.mmc), bank: num(ck.bank), credit: creditUSD(ck.credit) };
+    case 'liv': return { ...z, liv: total };
+    default: return { usd: num(ck.usd), cdf: num(ck.cdf), mm: num(ck.mm), mmc: num(ck.mmc), bank: num(ck.bank), credit: creditUSD(ck.credit), liv: 0 };
   }
 };
-const paidUSD = p => p.usd + p.cdf / S.settings.rate + p.mm + p.mmc / S.settings.rate + p.bank + p.credit;
+const paidUSD = p => p.usd + p.cdf / S.settings.rate + p.mm + p.mmc / S.settings.rate + p.bank + p.credit + (p.liv || 0);
 
 views.sales = el => {
   if (!ck) ck = freshCk();
@@ -1716,7 +1809,7 @@ views.sales = el => {
     const rows = [...S.sales].sort((a, b) => b.ts - a.ts).slice(0, 150);
     el.innerHTML = page('Ventes', '', tabs + `<label class="sbox">${ic('search', 18)}<input data-filter="#shist" placeholder="Rechercher (n°, client, vendeur)…"></label><div id="shist" class="llist">
       ${rows.map(s => `<div class="lrow" data-s="${esc((s.no + ' ' + (s.clientName || '') + ' ' + s.userName).toLowerCase())}"><span class="jic ${s.status === 'cancelled' ? 'red' : 'blue'}">${ic('cart', 20)}</span>
-      <div class="jm"><b>${s.no}${s.status === 'cancelled' ? ' · Annulée' : ''}${s.isReturn ? ' · Retour' : ''}</b><small>${fmtDate(s.ts)} · ${esc(s.userName)}${s.clientName ? ' · ' + esc(s.clientName) : ''}</small></div><div class="jr"><b class="${s.status === 'cancelled' || s.isReturn ? 'neg' : 'pos'}">${fmAt(s.total, s.rate)}</b></div>
+      <div class="jm"><b>${s.no}${s.status === 'cancelled' ? ' · Annulée' : ''}${s.isReturn ? ' · Retour' : ''}${s.deliv?.st === 'pending' && s.status !== 'cancelled' ? ' · 🚚 À livrer' : ''}</b><small>${fmtDate(s.ts)} · ${esc(s.userName)}${s.clientName ? ' · ' + esc(s.clientName) : ''}</small></div><div class="jr"><b class="${s.status === 'cancelled' || s.isReturn ? 'neg' : 'pos'}">${fmAt(s.total, s.rate)}</b></div>
       <div class="ac"><button data-act="receipt" data-id="${s.id}" title="Reçu">${ic('eye')}</button>${isMgr() && s.status !== 'cancelled' && !s.isReturn ? `<button data-act="retsale" data-id="${s.id}" title="Retour / échange">↩</button><button class="del" data-act="cancelsale" data-id="${s.id}" title="Annuler">${ic('trash')}</button>` : ''}</div></div>`).join('') || '<p class="muted">Aucune vente.</p>'}</div>`);
     return;
   }
@@ -1762,6 +1855,7 @@ A.addcart = d => {
 };
 A.opencart = () => openCart();
 A.cartfill = items => { cart = items.map(x => ({ ...x })); ck = freshCk(); stab = 'new'; };
+window.__sx = { curSession, pmAllowed, cashop };
 // code scanné ou saisi : produit trouvé (formats normalisés) → panier ; code d'emballage proche → confirmation ; inconnu → association / création rapide
 function addByCode(code) {
   const p = findByCode(code);
@@ -1805,7 +1899,8 @@ function openCart() {
         <label>Mobile Money CDF (FC)<input type="number" step="any" inputmode="decimal" data-pf="mmc" value="${esc(ck.mmc)}"></label><label>Mobile Money USD ($)<input type="number" step="any" inputmode="decimal" data-pf="mm" value="${esc(ck.mm)}"></label>
         <label>Banque USD ($)<input type="number" step="any" inputmode="decimal" data-pf="bank" value="${esc(ck.bank)}"></label><label>Crédit (${S.settings.mainCur === 'USD' ? '$' : 'FC'})<input type="number" step="any" inputmode="decimal" data-pf="credit" value="${esc(ck.credit)}"></label></div>
         <div class="row sp"><span>Reste à payer</span><b id="reste"></b></div></div>`
-      : `<p class="muted">À encaisser : <b>${ck.mode === 'cdf' || ck.mode === 'mmc' ? cdf(pa.cdf + pa.mmc) : ck.mode === 'credit' ? usd(t.total) : usdx(pa.usd + pa.mm + pa.bank)}</b>${ck.mode === 'credit' ? ' (ajouté à la dette du client)' : ''}</p>`}
+      : `<p class="muted">À encaisser : <b>${ck.mode === 'cdf' || ck.mode === 'mmc' ? cdf(pa.cdf + pa.mmc) : ck.mode === 'credit' || ck.mode === 'liv' ? usd(t.total) : usdx(pa.usd + pa.mm + pa.bank)}</b>${ck.mode === 'credit' ? ' (ajouté à la dette du client)' : ck.mode === 'liv' ? ' (à la livraison : rien en caisse maintenant)' : ''}</p>`}
+      ${ck.mode === 'liv' ? `<div class="frm"><label>Adresse / contact de livraison *<input data-cf="laddr" value="${esc(ck.laddr || '')}" maxlength="200" placeholder="Quartier, avenue, repère, téléphone"></label><p class="muted sm">🚚 Le stock sort maintenant. <b>Aucun argent n'entre en caisse</b> et <b>aucune dette</b> n'est créée. Vous encaissez quand la commande est livrée (menu Commandes → Livraisons).</p></div>` : ''}
       ${needCl ? `<div class="frm"><label>Échéance du crédit<input type="date" data-cf="due" value="${esc(ck.due || addDays(dayKey(), S.settings.creditDays || 30))}"></label></div>` : ''}
       <div class="row end"><button class="btn ghost" data-ca="clear">Vider</button><button class="btn" data-ca="pay">Encaisser & enregistrer</button></div>`;
     reste();
@@ -1865,6 +1960,7 @@ function checkout(w) {
     if (!(cl.limit > 0) || (cl.debt || 0) + pay.credit > cl.limit + 1e-9) throw new Error(`Plafond de crédit dépassé (plafond ${usd(cl.limit || 0)}, dette ${usd(cl.debt || 0)})`);
   }
   if ((pay.usd > 0 || pay.cdf > 0) && !curSession()) throw new Error("Ouvrez la caisse (menu Caisse) avant d'encaisser des espèces");
+  if (pay.liv > 0 && (ck.laddr || '').trim().length < 3) throw new Error("Indiquez l'adresse ou le contact de livraison");
   const id = uid(), ts = Date.now(), d = new Date(ts);
   let newCl = null;   // passant avec nom + téléphone : fiche client créée (ou fiche existante retrouvée par le téléphone)
   if (pp?.name && pp?.phone) {
@@ -1879,7 +1975,7 @@ function checkout(w) {
   const sale = {
     id, no, ts, day: dayKey(ts), uid: S.user.uid, userName: who(), items, subtotal: r2(t.sub), discount: t.discAmt, discPct: t.disc, total: t.total, ...(t.autoAmt ? { autoDisc: t.autoAmt, autoLabel: t.autoLabel } : {}),
     pay, rate: S.settings.rate, rateDate: S.settings.rateDate || '', mainCur: S.settings.mainCur, due: pay.credit > 0 ? (ck.due || addDays(dayKey(), S.settings.creditDays || 30)) : '',
-    clientId: cl?.id || '', clientName: cl?.name || (passant ? 'Passant' + (pnm ? ' — ' + pnm : '') : ''), status: 'ok', cost: r2(cost + bonusCost), profit: r2(t.total - cost - bonusCost), ...(bonusArr.length ? { bonus: bonusArr, bonusCost } : {}), ...(passant && cl ? { clientPhone: cl.phone || '' } : {})
+    clientId: cl?.id || '', clientName: cl?.name || (passant ? 'Passant' + (pnm ? ' — ' + pnm : '') : ''), status: 'ok', ...(pay.liv > 0 ? { deliv: { st: 'pending', addr: (ck.laddr || '').trim().slice(0, 200) } } : {}), cost: r2(cost + bonusCost), profit: r2(t.total - cost - bonusCost), ...(bonusArr.length ? { bonus: bonusArr, bonusCost } : {}), ...(passant && cl ? { clientPhone: cl.phone || '' } : {})
   };
   const b = batch();
   b.set('sales', id, sale);
@@ -1887,7 +1983,7 @@ function checkout(w) {
   fefo(b, need);
   [['usd', 'USD'], ['cdf', 'CDF'], ['mm', 'MM'], ['mmc', 'MMC'], ['bank', 'BANK']].forEach(([k, acc]) => { if (pay[k] > 0) cashop(b, 'sale', acc, pay[k], 'Vente ' + no, id); });
   if (newCl) b.set('clients', newCl.id, newCl); else if (cl) b.upd('clients', cl.id, { debt: inc(pay.credit), spent: inc(t.total), last: ts });
-  jr(b, 'Vente', `Vente ${no} — ${items.length} article(s)${cl ? ' — ' + cl.name : ''}${bonusArr.length ? ' — bonus offert : ' + bonusTxt(bonusArr) : ''}`, t.total, 'USD', '', id);
+  jr(b, 'Vente', `Vente ${no} — ${items.length} article(s)${pay.liv > 0 ? ' — 🚚 LIVRAISON (à encaisser à la remise)' : ''}${cl ? ' — ' + cl.name : ''}${bonusArr.length ? ' — bonus offert : ' + bonusTxt(bonusArr) : ''}`, t.total, 'USD', '', id);
   if (newCl) jr(b, 'Client', `Fiche client créée automatiquement depuis un passant : ${newCl.name} (${newCl.phone}) — vente ${no} (par ${who()})`, null, '', '', newCl.id);
   b.commit(); tgSale(sale, need);
   cart = []; ck = freshCk();
@@ -1901,7 +1997,7 @@ function receiptHtml(s) {
   <div class="rc-t"><div><span>Sous-total</span><span>${f(s.subtotal)}</span></div>${s.discount ? `<div><span>Remise (${Math.round(s.discPct * 100) / 100}%)${s.autoLabel ? ' — ' + esc(s.autoLabel) : ''}</span><span>${s.isReturn ? '' : '−'}${f(s.discount)}</span></div>` : ''}${s.bonus?.length ? `<div><span>🎁 Bonus offert (gratuit)</span><span style="text-align:right">${esc(bonusTxt(s.bonus))}</span></div>` : ''}
   <div><b>TOTAL</b><b>${f(s.total)}</b></div><div><span>≈</span><span>${(s.mainCur || 'CDF') === 'USD' ? cdf(s.total * (s.rate || S.settings.rate)) : usdx(s.total)}</span></div>
   ${p.cdf ? `<div><span>Espèces CDF</span><span>${cdf(p.cdf)}</span></div>` : ''}${p.usd ? `<div><span>Espèces USD</span><span>${usdx(p.usd)}</span></div>` : ''}
-  ${p.mmc ? `<div><span>Mobile Money CDF</span><span>${cdf(p.mmc)}</span></div>` : ''}${p.mm ? `<div><span>Mobile Money USD</span><span>${usdx(p.mm)}</span></div>` : ''}${p.bank ? `<div><span>Banque USD</span><span>${usdx(p.bank)}</span></div>` : ''}${p.credit ? `<div><span>Crédit${s.due ? ' (échéance ' + s.due + ')' : ''}</span><span>${f(p.credit)}</span></div>` : ''}
+  ${p.mmc ? `<div><span>Mobile Money CDF</span><span>${cdf(p.mmc)}</span></div>` : ''}${p.mm ? `<div><span>Mobile Money USD</span><span>${usdx(p.mm)}</span></div>` : ''}${p.bank ? `<div><span>Banque USD</span><span>${usdx(p.bank)}</span></div>` : ''}${p.liv ? `<div><b>🚚 À payer à la livraison</b><b>${f(p.liv)}</b></div>` : ''}${p.credit ? `<div><span>Crédit${s.due ? ' (échéance ' + s.due + ')' : ''}</span><span>${f(p.credit)}</span></div>` : ''}
   <div><small>Taux : 1 $ = ${(s.rate || S.settings.rate).toLocaleString('fr-FR')} FC</small></div></div>
   <p style="text-align:center;margin:8px 0 0">${esc(S.settings.footer || '')}</p><div class="qrb" data-v="${esc(vurl(s))}" style="display:flex;justify-content:center;margin-top:8px"></div><div style="text-align:center;font-size:.7rem">Code de vérification : ${esc(vcode(s))}</div></div>`;
 }
@@ -2318,14 +2414,14 @@ document.addEventListener('change', e => { const t = e.target; if (t?.name === '
 views.purchases = el => {
   const rows = [...S.purchases].sort((a, b) => b.ts - a.ts).slice(0, 100);
   el.innerHTML = page('Entrées de stock', `<button class="btn" data-act="newpurchase">${ic('plus')} Nouvelle entrée</button>`, `
-    <div class="llist">${rows.map(p => lrow({ i: 'truck', col: p.payType === 'credit' ? 'orange' : 'green', t: esc(p.supplierName || 'Sans fournisseur'),
-      s: `${fmtDate(p.ts)} · ${p.items.length} produit(s) · par ${esc(p.userName)}`, r: usd(p.total), rs: p.payType === 'credit' ? 'À crédit' : 'Cash ' + (ACC[p.acc]?.[0] || p.cur || ''),
-      act: `<button data-act="pview" data-id="${p.id}">${ic('eye')}</button>` })).join('') || '<p class="muted">Aucune entrée.</p>'}</div>`);
+    <div class="llist">${rows.map(p => lrow({ i: 'truck', col: p.payType === 'credit' ? 'orange' : p.payType === 'liv' ? 'blue' : 'green', t: esc(p.supplierName || 'Sans fournisseur'),
+      s: `${fmtDate(p.ts)} · ${p.items.length} produit(s) · par ${esc(p.userName)}`, r: usd(p.total), rs: p.payType === 'credit' ? 'À crédit' : p.payType === 'liv' ? '🚚 Livraison — à régulariser' : 'Cash ' + (ACC[p.acc]?.[0] || p.cur || ''),
+      act: `${p.payType === 'liv' ? `<button data-act="purreg" data-id="${p.id}" title="Régulariser (payer)">💳</button>` : ''}<button data-act="pview" data-id="${p.id}">${ic('eye')}</button>` })).join('') || '<p class="muted">Aucune entrée.</p>'}</div>`);
 };
 A.pview = d => {
   const p = S.purchases.find(x => x.id === d.id); if (!p) return; const pc = p.pcur || 'USD';
   modal('Entrée du ' + fmtDate(p.ts), `<div class="mi"><span>Fournisseur</span><b>${esc(p.supplierName || '—')}</b></div><div class="mi"><span>Enregistré par</span><b>${esc(p.userName)}</b></div>
-    <div class="mi"><span>Paiement</span><b>${p.payType === 'credit' ? 'À crédit (dette fournisseur)' + (p.due ? ' — échéance ' + p.due : '') : 'Cash — ' + (ACC[p.acc]?.[0] || p.cur || '')}</b></div>
+    <div class="mi"><span>Paiement</span><b>${p.payType === 'credit' ? 'À crédit (dette fournisseur)' + (p.due ? ' — échéance ' + p.due : '') : p.payType === 'liv' ? '🚚 Livraison — pas encore payée (ni caisse, ni dette)' : 'Cash — ' + (ACC[p.acc]?.[0] || p.cur || '')}${p.delivery?.st === 'done' ? ' · livraison régularisée le ' + fmtDate(p.delivery.doneTs) : ''}</b></div>${p.payType === 'liv' ? `<div class="row end" style="margin:8px 0"><button class="btn sm" data-act="purreg" data-id="${p.id}">💳 Régulariser (payer ou mettre en dette)</button></div>` : ''}
     ${p.rate ? `<div class="mi"><span>Taux enregistré</span><b>1 $ = ${p.rate.toLocaleString('fr-FR')} FC</b></div>` : ''}${p.note ? `<div class="mi"><span>Observation</span><b>${esc(p.note)}</b></div>` : ''}
     <div class="tw" style="margin:10px 0"><table class="tbl"><thead><tr><th>Produit</th><th>Qté</th><th>Prix unit.</th><th>Total</th></tr></thead><tbody>${p.items.map(i => `<tr><td>${esc(i.name)}</td><td>${i.qty} ${esc(i.unit)}</td><td>${money(i.cost, pc)}</td><td>${money(i.qty * i.cost, pc)}</td></tr>`).join('')}</tbody></table></div>
     <div class="mi"><span>Sous-total</span><b>${money(p.itemsTotalN ?? p.itemsTotal, pc)}</b></div><div class="mi"><span>Transport</span><b>${money(p.transportN ?? p.transport, pc)}</b></div><div class="mi"><span>TOTAL</span><b>${money(p.totalN ?? p.total, pc)}</b></div>${attHtml(p.proof)}`);
@@ -2383,7 +2479,7 @@ A.newpurchase = () => {
     ${sel('Devise des prix saisis', 'pcur', CURS, mc)}
     <div id="plines">${plRow()}</div><button type="button" class="btn ghost sm" data-act="addpl">${ic('plus', 16)} Ajouter un produit</button>
     <div class="two">${fld('Frais de transport', 'transport', 0, 'number', 'min="0"')}${fld('Date', 'date', dayKey(), 'date')}</div>
-    <div class="two">${sel('Paiement', 'payType', [['cash', 'Cash (déduit la caisse)'], ['credit', 'Crédit (dette fournisseur)']])}<label id="accl">Compte de paiement<select name="acc">${accs.map(([k, t]) => `<option value="${k}">${t}</option>`).join('')}</select></label></div>
+    <div class="two">${sel('Paiement', 'payType', [['cash', 'Cash (déduit la caisse)'], ['credit', 'Crédit (dette fournisseur)'], ['liv', '🚚 Livraison (ni caisse, ni dette)']])}<label id="accl">Compte de paiement<select name="acc">${accs.map(([k, t]) => `<option value="${k}">${t}</option>`).join('')}</select></label></div>
     <label id="duel" style="display:none">Échéance de paiement<input type="date" name="due" value="${addDays(dayKey(), 30)}"></label>
     ${fld('Observation', 'note', '')}<label>Justificatif (photo ou PDF, facultatif)<input type="file" id="pjust" accept="image/*,application/pdf" capture="environment"></label>
     <p class="neg" id="liq" style="display:none;font-weight:600;margin:6px 0"></p>
@@ -2402,7 +2498,7 @@ A.newpurchase = () => {
       if (v.payType === 'cash') { const bal = balances()[v.acc] || 0; if (bal < payAmt - 1e-9) throw new Error(`Fonds insuffisants (${ACC[v.acc][0]}) : solde ${money(bal, v.acc)}, à décaisser ${money(payAmt, v.acc)} — il manque ${money(payAmt - bal, v.acc)}. Livraison cash bloquée.`); }
       const b = batch();
       b.set('purchases', id, { id, ts, day: dayKey(ts), supplierId: supplier?.id || '', supplierName: supplier?.name || '', items, itemsTotal, transport, total, itemsTotalN: r2(itemsN), transportN: r2(transportN), totalN: r2(totalN), pcur: pc,
-        rate: supRate(supplier), rateDate: (+supplier?.rate > 0 ? supplier.rateDate : S.settings.rateDate) || '', supplierRate: +supplier?.rate > 0, payType: v.payType, acc: v.payType === 'cash' ? v.acc : '', cur: v.payType === 'cash' ? nat(v.acc) : '', due: v.payType === 'credit' ? v.due : '', note: v.note, proof, uid: S.user.uid, userName: who() });
+        rate: supRate(supplier), rateDate: (+supplier?.rate > 0 ? supplier.rateDate : S.settings.rateDate) || '', supplierRate: +supplier?.rate > 0, payType: v.payType, ...(v.payType === 'liv' ? { delivery: { st: 'pending' } } : {}), acc: v.payType === 'cash' ? v.acc : '', cur: v.payType === 'cash' ? nat(v.acc) : '', due: v.payType === 'credit' ? v.due : '', note: v.note, proof, uid: S.user.uid, userName: who() });
       L.forEach(l => {
         const base = l.qty * l.u.factor, share = itemsN > 0 ? (l.qty * l.cost) / itemsN : 0, landed = base > 0 ? (T(l.qty * l.cost) + transport * share) / base : l.p.buy, bcur = l.p.buyCur || 'USD';
         // prix d'achat unitaire dans la devise propre du produit (taux du fournisseur si conversion nécessaire)
@@ -2410,10 +2506,11 @@ A.newpurchase = () => {
         b.upd('products', l.p.id, { qty: inc(base), buy: r2(toUSD(buyAmt, bcur)), buyAmt, updated: ts, updatedBy: who() });
       });
       if (v.payType === 'cash') cashop(b, 'purchase', v.acc, -payAmt, 'Achat stock ' + (supplier?.name || ''), id, ts);
-      else b.upd('suppliers', supplier.id, { debt: inc(total), bought: inc(total), last: ts });
+      else if (v.payType === 'credit') b.upd('suppliers', supplier.id, { debt: inc(total), bought: inc(total), last: ts });
+      else if (supplier) b.upd('suppliers', supplier.id, { last: ts });
       if (supplier && v.payType === 'cash') b.upd('suppliers', supplier.id, { bought: inc(total), last: ts });
-      jr(b, 'Entrée stock', `Approvisionnement ${supplier?.name || ''} — ${items.length} produit(s) — ${v.payType === 'credit' ? 'crédit' : 'cash ' + ACC[v.acc][0]}`, total, 'USD', '', id);
-      b.commit(); toast('Entrée enregistrée, stock mis à jour');
+      jr(b, 'Entrée stock', `Approvisionnement ${supplier?.name || ''} — ${items.length} produit(s) — ${v.payType === 'credit' ? 'crédit' : v.payType === 'liv' ? '🚚 LIVRAISON (hors caisse, hors dette — à régulariser)' : 'cash ' + ACC[v.acc][0]}`, total, 'USD', '', id);
+      b.commit(); toast(v.payType === 'liv' ? 'Livraison enregistrée : stock mis à jour, caisse et dette inchangées' : 'Entrée enregistrée, stock mis à jour');
     }, {
       wide: true, ok: "Enregistrer l'entrée",
       onOpen: (w, f) => {
@@ -2443,6 +2540,27 @@ A.newpurchase = () => {
         f.addEventListener('input', calc); f.addEventListener('click', () => setTimeout(calc)); fillProds(f); calc();
       }
     });
+};
+
+
+A.purreg = d => {
+  const p = S.purchases.find(x => x.id === d.id); if (!p || p.payType !== 'liv') return; const sup = S.suppliers.find(s => s.id === p.supplierId), accs = accOptions();
+  form('Régulariser la livraison — ' + (p.supplierName || 'Sans fournisseur'), `<p>Montant de la livraison : <b>${usd(p.total)}</b></p>
+    ${sel('Comment la régler ?', 'payType', [['cash', 'Cash (déduit la caisse)'], ['credit', 'Crédit (dette fournisseur)']])}
+    <label>Compte de paiement<select name="acc">${accs.map(([k, t]) => `<option value="${k}">${t}</option>`).join('')}</select></label>
+    <label>Échéance (si crédit)<input type="date" name="due" value="${addDays(dayKey(), 30)}"></label>`, v => {
+    const cur = S.purchases.find(x => x.id === p.id); if (!cur || cur.payType !== 'liv') return;
+    if (v.payType === 'credit' && !sup) throw new Error("Cette livraison n'a pas de fournisseur : choisissez Cash");
+    if (v.payType === 'cash' && !v.acc) throw new Error('Aucun mode de paiement disponible');
+    const pc = p.pcur || 'USD', payAmt = nat(v.acc) === pc ? (p.totalN ?? p.total) : fromUSDs(p.total, v.acc, sup), ts = Date.now();
+    if (v.payType === 'cash') { const bal = balances()[v.acc] || 0; if (bal < payAmt - 1e-9) throw new Error(`Fonds insuffisants (${ACC[v.acc][0]}) : solde ${money(bal, v.acc)}, à décaisser ${money(payAmt, v.acc)}`); }
+    const b = batch();
+    b.upd('purchases', p.id, { payType: v.payType, acc: v.payType === 'cash' ? v.acc : '', cur: v.payType === 'cash' ? nat(v.acc) : '', due: v.payType === 'credit' ? v.due : '', delivery: { ...(p.delivery || {}), st: 'done', doneTs: ts, doneBy: who() } });
+    if (v.payType === 'cash') { cashop(b, 'purchase', v.acc, -payAmt, 'Règlement livraison ' + (p.supplierName || ''), p.id, ts); if (sup) b.upd('suppliers', sup.id, { bought: inc(p.total), last: ts }); }
+    else b.upd('suppliers', sup.id, { debt: inc(p.total), bought: inc(p.total), last: ts });
+    jr(b, 'Entrée stock', `Livraison ${p.supplierName || ''} régularisée : ${v.payType === 'credit' ? 'mise en dette fournisseur' : 'payée cash ' + ACC[v.acc][0]}`, p.total, 'USD', '', p.id);
+    b.commit(); toast('Livraison régularisée');
+  });
 };
 
 /* ================= DÉPENSES ================= */
@@ -2880,7 +2998,7 @@ function buildReport(type, from, to) {
   const inR = t => t >= from && t <= to, ok = S.sales.filter(s => s.status !== 'cancelled' && inR(s.ts)), ex = S.expenses.filter(e => inR(e.ts)), per = ` (${iso(from)} au ${iso(to)})`, C = ' (' + mcur() + ')';
   const eu = e => toUSD(e.amt, e.cur), rev = sum(ok, s => s.total), cost = sum(ok, s => s.cost), exp = sum(ex, eu);
   if (type === 'sales') return { title: 'Rapport des ventes' + per, head: ['N°', 'Date', 'Client', 'Vendeur', 'Remise' + C, 'Total' + C, 'Paiement', 'Taux'], rows: ok.sort((a, b) => a.ts - b.ts).map(s => [s.no, fmtDate(s.ts), s.clientName || '', s.userName, mv(s.discount), mv(s.total), ['cdf', 'usd', 'mmc', 'mm', 'bank', 'credit'].filter(k => s.pay?.[k] > 0).map(k => ({ cdf: 'CDF', usd: 'USD', mmc: 'MM-CDF', mm: 'MM-USD', bank: 'Banque', credit: 'Crédit' }[k])).join('+'), s.rate || '']), summary: [['Nombre de ventes', ok.length], ["Chiffre d'affaires", usd(rev)], ['Panier moyen', usd(ok.length ? rev / ok.length : 0)]] };
-  if (type === 'purchases') { const pu = S.purchases.filter(p => inR(p.ts)).sort((a, b) => a.ts - b.ts); return { title: 'Rapport des achats' + per, head: ['Date', 'Fournisseur', 'Produits', 'Transport' + C, 'Total' + C, 'Paiement', 'Saisi par'], rows: pu.map(p => [fmtDate(p.ts), p.supplierName || '', p.items.map(i => i.name + ' x' + i.qty).join(', '), mv(p.transport), mv(p.total), p.payType === 'credit' ? 'Crédit' : 'Cash', p.userName]), summary: [['Total achats', usd(sum(pu, p => p.total))], ['Dont à crédit', usd(sum(pu.filter(p => p.payType === 'credit'), p => p.total))]] }; }
+  if (type === 'purchases') { const pu = S.purchases.filter(p => inR(p.ts)).sort((a, b) => a.ts - b.ts); return { title: 'Rapport des achats' + per, head: ['Date', 'Fournisseur', 'Produits', 'Transport' + C, 'Total' + C, 'Paiement', 'Saisi par'], rows: pu.map(p => [fmtDate(p.ts), p.supplierName || '', p.items.map(i => i.name + ' x' + i.qty).join(', '), mv(p.transport), mv(p.total), p.payType === 'credit' ? 'Crédit' : p.payType === 'liv' ? 'Livraison' : 'Cash', p.userName]), summary: [['Total achats', usd(sum(pu, p => p.total))], ['Dont à crédit', usd(sum(pu.filter(p => p.payType === 'credit'), p => p.total))], ['Livraisons non réglées', usd(sum(pu.filter(p => p.payType === 'liv'), p => p.total))]] }; }
   if (type === 'expenses') return { title: 'Rapport des dépenses' + per, head: ['Date', 'Motif', 'Catégorie', 'Montant', 'Devise', 'Équiv.' + C, 'Responsable'], rows: ex.sort((a, b) => a.ts - b.ts).map(e => [fmtDate(e.ts), e.reason, e.cat, e.amt, e.cur, mv(eu(e)), e.resp]), summary: [['Total dépenses', usd(exp)], ['En CDF', cdf(sum(ex.filter(e => e.cur === 'CDF'), e => e.amt))], ['En USD', usdx(sum(ex.filter(e => e.cur !== 'CDF'), e => e.amt))]] };
   if (type === 'stock') return { title: 'Rapport des stocks', head: ['Produit', 'Catégorie', 'Stock', 'Minimum', "Prix d'achat" + C, 'Valeur' + C, 'Expiration', 'État'], rows: S.products.map(p => [p.name, catName(p.cat), fmtQty(p), p.min, mv(p.buy), mv(p.qty * p.buy), p.exp || '', p.qty <= 0 ? 'Rupture' : p.qty <= p.min ? 'Faible' : 'OK']), summary: [['Valeur du stock', usd(sum(S.products, p => p.qty * p.buy))], ['Ruptures', S.products.filter(p => p.qty <= 0).length]] };
   if (type === 'top') {
@@ -4168,6 +4286,7 @@ views.settings = el => {
     ${fld('Prix barré : majoration affichée (%), 0 = aucun', 'shopMark', s.shopMark || 0, 'number', 'min="0" max="100" step="1"')}<p class="muted sm">Sur la boutique, un prix plus élevé est affiché barré à côté du vrai prix (celui de l'application), avec une étiquette de réduction. Exemple : 20 → un article à 10 $ s'affiche « <s>12 $</s> 10 $ ». Les clients paient toujours le prix réel. Le paiement se fait uniquement à la réception : la boutique le rappelle partout aux clients.</p>
     <label>Livraison (zones, frais, délais)<textarea name="shopDeliv" rows="2" placeholder="Livraison dans la commune : 2 $ · Gratuite dès 50 $">${esc(s.shopDeliv || '')}</textarea></label>
     <label>Message d'accueil<textarea name="shopMsg" rows="2" placeholder="Bienvenue ! Commandez, nous vous rappelons.">${esc(s.shopMsg || '')}</textarea></label>
+    <label class="chk"><input type="checkbox" name="shopAsk" ${s.shopAsk !== false ? 'checked' : ''}> Demander (facultatif) le prénom des visiteurs à leur première visite</label>
     <div class="row sp"><small class="muted">Lien : <b>${esc(shopUrl())}</b></small><button type="button" class="btn ghost sm" data-act="shopcopy">Copier</button></div><button class="btn">Enregistrer et publier</button></form>`;
   if (tab === 'com' && adm) { const tp = TP(), tm = TM(); body = `<form class="card frm" id="cf"><h4>Identité fiscale (affichée sur les factures)</h4><div class="two">${fld('NIF', 'nif', s.nif || '')}${fld('RCCM', 'rccm', s.rccm || '')}</div>${fld('ID.NAT', 'idnat', s.idnat || '')}
     <h4>Propriétaire (rapport hebdomadaire)</h4><div class="two">${fld('Téléphone WhatsApp', 'ownerPhone', s.ownerPhone || '')}${fld('E-mail', 'ownerEmail', s.ownerEmail || '', 'email')}</div>
