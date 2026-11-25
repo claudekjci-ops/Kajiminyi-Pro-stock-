@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0A8A5A">
+<title>Boutique en ligne</title>
+<style>
+:root{--g:#0A8A5A;--g2:#067048;--bg:#f4f6f5;--card:#fff;--tx:#14231c;--mu:#66756d;--bd:#e2e8e5;--red:#E4572E;--y:#F4C542}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1714;--card:#17221d;--tx:#e8f1ec;--mu:#93a39b;--bd:#26352e}}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--tx);padding-bottom:84px}
+header{background:var(--g);color:#fff;padding:14px 16px calc(14px);position:sticky;top:0;z-index:20;box-shadow:0 2px 10px #0003}
+.hd{display:flex;align-items:center;gap:12px;max-width:1100px;margin:auto}
+.hd img,.hd i{width:42px;height:42px;border-radius:12px;object-fit:cover;background:#fff3;display:grid;place-items:center;font-style:normal;font-weight:800;font-size:1.2rem;flex:none}
+.hd b{display:block;font-size:1.1rem;line-height:1.2}.hd small{opacity:.85}
+.hd a{margin-left:auto;color:#fff;text-decoration:none;font-size:.85rem;border:1px solid #fff6;border-radius:20px;padding:6px 12px;white-space:nowrap}
+main{max-width:1100px;margin:auto;padding:12px 14px}
+.msg{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px 14px;margin:0 0 12px;color:var(--mu);font-size:.92rem}
+.sb{display:flex;gap:8px;position:sticky;top:70px;z-index:10;background:var(--bg);padding:6px 0}
+.sb input{flex:1;padding:12px 14px;border-radius:12px;border:1px solid var(--bd);background:var(--card);color:var(--tx);font-size:1rem}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:6px 0 10px;scrollbar-width:none}.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:8px 14px;border-radius:20px;font-size:.9rem;cursor:pointer}
+.chip.on{background:var(--g);color:#fff;border-color:var(--g)}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+@media(min-width:640px){.grid{grid-template-columns:repeat(3,1fr)}}@media(min-width:900px){.grid{grid-template-columns:repeat(4,1fr)}}
+.p{background:var(--card);border:1px solid var(--bd);border-radius:16px;overflow:hidden;display:flex;flex-direction:column}
+.p .im{aspect-ratio:1;background:linear-gradient(135deg,#0A8A5A22,#F4C54233);display:grid;place-items:center;font-size:2.4rem;font-weight:800;color:var(--g);overflow:hidden}
+.p .im img{width:100%;height:100%;object-fit:cover}
+.p .bd{padding:10px;display:flex;flex-direction:column;gap:4px;flex:1}
+.p h3{margin:0;font-size:.95rem;line-height:1.25}.p small{color:var(--mu)}
+.pr{font-weight:800;font-size:1.05rem;color:var(--g)}.pr2{font-size:.8rem;color:var(--mu)}
+.p select{width:100%;padding:7px;border-radius:8px;border:1px solid var(--bd);background:var(--card);color:var(--tx)}
+.btn{border:0;background:var(--g);color:#fff;font-weight:700;padding:11px 14px;border-radius:12px;font-size:.95rem;cursor:pointer;width:100%}
+.btn:active{background:var(--g2)}.btn.gh{background:transparent;color:var(--g);border:1px solid var(--g)}.btn[disabled]{background:var(--bd);color:var(--mu);cursor:not-allowed}
+.out{position:absolute;top:8px;left:8px;background:var(--red);color:#fff;font-size:.72rem;padding:3px 8px;border-radius:10px;font-weight:700}
+.p .im{position:relative}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--bd);padding:10px 14px calc(10px + env(safe-area-inset-bottom));z-index:30;display:none}
+.bar.on{display:block}.bar .btn{max-width:1100px;margin:auto;display:flex;justify-content:space-between;align-items:center}
+.sheet{position:fixed;inset:0;background:#0008;z-index:50;display:none;align-items:flex-end;justify-content:center}.sheet.on{display:flex}
+.sh{background:var(--card);width:100%;max-width:560px;max-height:92dvh;overflow:auto;border-radius:20px 20px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom))}
+@media(min-width:640px){.sheet{align-items:center}.sh{border-radius:20px}}
+.sh h2{margin:0 0 10px;font-size:1.15rem;display:flex;justify-content:space-between;align-items:center}
+.x{background:none;border:0;font-size:1.4rem;color:var(--mu);cursor:pointer}
+.ln{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--bd)}
+.ln .t{flex:1;font-size:.92rem}.ln .t small{display:block;color:var(--mu)}
+.q{display:flex;align-items:center;gap:6px}.q button{width:30px;height:30px;border-radius:50%;border:1px solid var(--bd);background:var(--card);color:var(--tx);font-size:1.1rem;cursor:pointer}
+label{display:block;font-size:.85rem;color:var(--mu);margin:10px 0 4px}
+.sh input[type=text],.sh input[type=tel],.sh textarea{width:100%;padding:11px;border-radius:10px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);font-size:1rem;font-family:inherit}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:8px}.seg label{margin:0;border:1px solid var(--bd);border-radius:12px;padding:10px;color:var(--tx);cursor:pointer;display:flex;gap:8px;align-items:center;font-size:.9rem}
+.seg input:checked+span{font-weight:700;color:var(--g)}
+.tot{display:flex;justify-content:space-between;font-weight:800;font-size:1.15rem;padding:12px 0}
+.info{background:#F4C54226;border:1px solid #F4C54266;border-radius:12px;padding:10px;font-size:.85rem;margin:10px 0;white-space:pre-line}
+.hp{position:absolute;left:-9999px;opacity:0;height:0}
+.ok{text-align:center;padding:8px 0}.ok .big{font-size:3rem}.ok .no{font-size:1.6rem;font-weight:800;color:var(--g);letter-spacing:1px}
+.tl{display:flex;justify-content:space-between;margin:16px 0;position:relative}
+.tl div{flex:1;text-align:center;font-size:.72rem;color:var(--mu)}.tl div i{display:block;width:26px;height:26px;border-radius:50%;background:var(--bd);margin:0 auto 4px;line-height:26px;font-style:normal;color:#fff}
+.tl div.on{color:var(--g);font-weight:700}.tl div.on i{background:var(--g)}
+.empty{text-align:center;color:var(--mu);padding:40px 10px}
+footer{text-align:center;color:var(--mu);font-size:.8rem;padding:20px 14px}
+.toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:#14231c;color:#fff;padding:10px 16px;border-radius:20px;font-size:.9rem;z-index:99;opacity:0;pointer-events:none;transition:.25s}.toast.on{opacity:1}
+</style>
+</head>
+<body>
+<header><div class="hd"><span id="logo"><i>ðŸ›ï¸</i></span><div><b id="shop">Boutique</b><small id="sub">Commandez en ligne</small></div><a href="#" id="mine">Mes commandes</a></div></header>
+<main id="main"><div class="empty">Chargementâ€¦</div></main>
+<footer id="foot"></footer>
+<div class="bar" id="bar"><button class="btn" id="bbtn"><span id="bn">Voir mon panier</span><b id="bt"></b></button></div>
+<div class="sheet" id="sheet"><div class="sh" id="sh"></div></div>
+<div class="toast" id="toast"></div>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, collection, getDocs, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+const app = initializeApp({ apiKey: "AIzaSyArCsbSzx-DIEemcXm26CnAc1qQ3iZrXaY", authDomain: "kajiminyi-stock-pro.firebaseapp.com", projectId: "kajiminyi-stock-pro", storageBucket: "kajiminyi-stock-pro.firebasestorage.app", messagingSenderId: "1045267964820", appId: "1:1045267964820:web:d94e42919904420a946581" });
+const db = getFirestore(app);
+const $ = s => document.querySelector(s), esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let cfg = null, prods = [], cat = '', q = '', cart = [], unsub = null;
+try { cart = JSON.parse(localStorage.getItem('ksp_cart') || '[]'); } catch { cart = []; }
+const saveCart = () => { try { localStorage.setItem('ksp_cart', JSON.stringify(cart)); } catch { /* */ } };
+const myOrders = () => { try { return JSON.parse(localStorage.getItem('ksp_orders') || '[]'); } catch { return []; } };
+const fmt = (usd) => { const r = cfg?.rate || 1, c = Math.round(usd * r).toLocaleString('fr-FR') + ' FC', u = '$' + (Math.round(usd * 100) / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); return cfg?.cur === 'USD' ? [u, c] : [c, u]; };
+const toast = m => { const t = $('#toast'); t.textContent = m; t.classList.add('on'); setTimeout(() => t.classList.remove('on'), 2200); };
+const rid = n => { const a = new Uint8Array(n); crypto.getRandomValues(a); return [...a].map(x => 'abcdefghijkmnpqrstuvwxyz23456789'[x % 32]).join(''); };
+const ST = [['new', 'ReÃ§ue'], ['confirmed', 'ConfirmÃ©e'], ['ready', 'PrÃªte'], ['done', 'TerminÃ©e']];
+const openSheet = h => { $('#sh').innerHTML = h; $('#sheet').classList.add('on'); };
+const closeSheet = () => { $('#sheet').classList.remove('on'); if (unsub) { unsub(); unsub = null; } };
+$('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet' || e.target.closest('[data-x]')) closeSheet(); });
+
+async function load() {
+  try {
+    const snap = await getDocs(collection(db, 'shop')); prods = []; cfg = null;
+    snap.docs.forEach(d => { if (d.id === '_cfg') cfg = d.data(); else prods.push(d.data()); });
+  } catch (e) { $('#main').innerHTML = '<div class="empty">Impossible de charger la boutique.<br>VÃ©rifiez votre connexion et rÃ©essayez.</div>'; return; }
+  if (!cfg || !cfg.open) { $('#main').innerHTML = `<div class="empty"><div style="font-size:3rem">ðŸ”’</div><b>${esc(cfg?.name || 'Boutique')}</b><br>La boutique en ligne est fermÃ©e pour le moment.</div>`; $('#shop').textContent = cfg?.name || 'Boutique'; return; }
+  document.title = cfg.name; $('#shop').textContent = cfg.name; $('#sub').textContent = cfg.addr || 'Commandez en ligne';
+  if (cfg.logo) $('#logo').innerHTML = `<img src="${esc(cfg.logo)}" alt="">`; else $('#logo').innerHTML = `<i>${esc((cfg.name || 'B')[0])}</i>`;
+  $('#foot').innerHTML = `${esc(cfg.name)}${cfg.addr ? ' Â· ' + esc(cfg.addr) : ''}${cfg.phone ? '<br>ðŸ“ž ' + esc(cfg.phone) : ''}`;
+  cart = cart.filter(l => prods.some(p => p.id === l.pid)); saveCart();
+  paint(); bar();
+  const c = new URLSearchParams(location.search).get('c'); if (c) track(c);
+}
+function paint() {
+  const L = prods.filter(p => (!cat || p.cat === cat) && (!q || (p.name + ' ' + (p.brand || '')).toLowerCase().includes(q.toLowerCase()))).sort((a, b) => (b.inStock - a.inStock) || a.name.localeCompare(b.name));
+  $('#main').innerHTML = `${cfg.msg ? `<div class="msg">${esc(cfg.msg)}</div>` : ''}
+  <div class="sb"><input id="q" type="search" placeholder="Rechercher un produitâ€¦" value="${esc(q)}" autocomplete="off"></div>
+  ${(cfg.cats || []).length > 1 ? `<div class="chips"><button class="chip ${cat ? '' : 'on'}" data-cat="">Tout</button>${cfg.cats.map(c => `<button class="chip ${cat === c.id ? 'on' : ''}" data-cat="${esc(c.id)}">${esc(c.name)}</button>`).join('')}</div>` : ''}
+  <div class="grid">${L.map(p => { const ui = 0, u = p.units[ui], pr = fmt(u.p); return `<div class="p" data-pid="${esc(p.id)}"><div class="im">${p.photo ? `<img loading="lazy" src="${esc(p.photo)}" alt="">` : esc(p.name[0])}${p.inStock ? '' : '<span class="out">Ã‰puisÃ©</span>'}</div>
+    <div class="bd"><h3>${esc(p.name)}</h3>${p.brand ? `<small>${esc(p.brand)}</small>` : ''}
+    ${p.units.length > 1 ? `<select data-u>${p.units.map((x, i) => `<option value="${i}" ${x.lim > 0 ? '' : 'disabled'}>${esc(x.n)}${x.f > 1 ? ' (Ã—' + x.f + ')' : ''}</option>`).join('')}</select>` : `<small>par ${esc(u.n)}</small>`}
+    <div class="pr" data-pr>${pr[0]}</div><div class="pr2" data-pr2>${pr[1]}</div>
+    <div style="margin-top:auto"><button class="btn" data-add ${p.inStock ? '' : 'disabled'}>${p.inStock ? 'Ajouter' : 'Ã‰puisÃ©'}</button></div></div></div>`; }).join('') || '<div class="empty" style="grid-column:1/-1">Aucun produit trouvÃ©.</div>'}</div>`;
+}
+document.addEventListener('input', e => { if (e.target.id === 'q') { q = e.target.value; const pos = e.target.selectionStart; paint(); const i = $('#q'); i.focus(); i.setSelectionRange(pos, pos); } });
+document.addEventListener('change', e => {
+  if (e.target.matches('[data-u]')) { const card = e.target.closest('.p'), p = prods.find(x => x.id === card.dataset.pid), u = p.units[+e.target.value], pr = fmt(u.p); card.querySelector('[data-pr]').textContent = pr[0]; card.querySelector('[data-pr2]').textContent = pr[1]; }
+});
+document.addEventListener('click', e => {
+  const t = e.target.closest('button,a'); if (!t) return;
+  if (t.dataset.cat != null && t.classList.contains('chip')) { cat = t.dataset.cat; paint(); }
+  else if (t.hasAttribute('data-add')) { const card = t.closest('.p'), p = prods.find(x => x.id === card.dataset.pid), ui = +(card.querySelector('[data-u]')?.value || 0), u = p.units[ui];
+    const l = cart.find(x => x.pid === p.id && x.ui === ui), have = l ? l.qty : 0; if (have + 1 > u.lim) return toast('QuantitÃ© maximale disponible atteinte');
+    if (l) l.qty++; else cart.push({ pid: p.id, ui, qty: 1 }); saveCart(); bar(); toast(p.name + ' ajoutÃ©'); }
+  else if (t.id === 'bbtn') openCart();
+  else if (t.id === 'mine') { e.preventDefault(); openMine(); }
+});
+const lineP = l => { const p = prods.find(x => x.id === l.pid), u = p?.units[l.ui]; return p && u ? { p, u, l } : null; };
+const total = () => cart.reduce((s, l) => { const x = lineP(l); return s + (x ? x.u.p * l.qty : 0); }, 0);
+function bar() { const n = cart.reduce((s, l) => s + l.qty, 0); $('#bar').classList.toggle('on', n > 0 && cfg?.open); $('#bn').textContent = `ðŸ›’ Voir mon panier (${n})`; $('#bt').textContent = fmt(total())[0]; }
+function openCart() {
+  if (!cart.length) return;
+  const ls = cart.map(lineP).filter(Boolean);
+  openSheet(`<h2>Mon panier <button class="x" data-x>âœ•</button></h2>${ls.map(({ p, u, l }, i) => `<div class="ln"><div class="t"><b>${esc(p.name)}</b><small>${esc(u.n)} Â· ${fmt(u.p)[0]}</small></div><div class="q"><button data-m="${i}">âˆ’</button><b>${l.qty}</b><button data-p="${i}">+</button></div><b>${fmt(u.p * l.qty)[0]}</b></div>`).join('')}
+  <div class="tot"><span>Total</span><span>${fmt(total())[0]}</span></div><div class="pr2" style="text-align:right;margin-top:-10px">${fmt(total())[1]}</div>
+  <form id="of" autocomplete="on"><label>Votre nom *<input type="text" name="name" required maxlength="80" autocomplete="name"></label>
+  <label>TÃ©lÃ©phone (WhatsApp si possible) *<input type="tel" name="phone" required maxlength="20" inputmode="tel" autocomplete="tel" placeholder="Ex. 0991234567"></label>
+  <label>Comment recevoir votre commande ?</label><div class="seg"><label><input type="radio" name="mode" value="delivery" checked> <span>ðŸšš Livraison</span></label><label><input type="radio" name="mode" value="pickup"> <span>ðŸª Retrait en boutique</span></label></div>
+  <div id="adw"><label>Adresse de livraison *<input type="text" name="addr" maxlength="200" placeholder="Quartier, avenue, numÃ©ro, repÃ¨re"></label>${cfg.deliv ? `<div class="info">ðŸšš ${esc(cfg.deliv)}</div>` : ''}</div>
+  <label>Paiement</label><div class="seg"><label><input type="radio" name="pay" value="cash" checked> <span>ðŸ’µ EspÃ¨ces (Ã  la remise)</span></label><label><input type="radio" name="pay" value="momo"> <span>ðŸ“± Mobile Money</span></label></div>
+  ${cfg.momo ? `<div class="info" id="momoi" hidden>ðŸ“± ${esc(cfg.momo)}\nEnvoyez le montant puis nous confirmerons votre commande.</div>` : ''}
+  <label>Remarque (facultatif)<textarea name="note" rows="2" maxlength="300"></textarea></label><input class="hp" name="website" tabindex="-1" autocomplete="off">
+  <button class="btn" id="osend" style="margin-top:14px">Envoyer ma commande</button><p class="pr2" style="text-align:center">Vous serez rappelÃ© pour confirmation. Aucun paiement en ligne n'est demandÃ© maintenant.</p></form>`);
+  const f = $('#of'), sync = () => { $('#adw').hidden = f.mode.value !== 'delivery'; const m = $('#momoi'); if (m) m.hidden = f.pay.value !== 'momo'; };
+  f.addEventListener('change', sync); sync();
+  try { const s = JSON.parse(localStorage.getItem('ksp_cust') || '{}'); if (s.name) f.name.value = s.name; if (s.phone) f.phone.value = s.phone; if (s.addr) f.addr.value = s.addr; } catch { /* */ }
+  $('#sh').querySelectorAll('[data-m],[data-p]').forEach(b => b.onclick = () => { const i = +(b.dataset.m ?? b.dataset.p), l = cart[i], x = lineP(l); if (b.dataset.m != null) { l.qty--; if (l.qty <= 0) cart.splice(i, 1); } else { if (l.qty + 1 > x.u.lim) return toast('QuantitÃ© maximale atteinte'); l.qty++; } saveCart(); bar(); if (cart.length) openCart(); else closeSheet(); });
+  f.addEventListener('submit', send);
+}
+async function send(e) {
+  e.preventDefault(); const f = e.target; if (f.website.value) return;   // piÃ¨ge anti-robot
+  const last = +localStorage.getItem('ksp_last') || 0; if (Date.now() - last < 20000) return toast('Patientez quelques secondes avant une nouvelle commande');
+  const name = f.name.value.trim(), phone = f.phone.value.trim(), mode = f.mode.value, addr = f.addr.value.trim();
+  if (phone.replace(/\D/g, '').length < 9) return toast('NumÃ©ro de tÃ©lÃ©phone invalide');
+  if (mode === 'delivery' && addr.length < 5) return toast("Indiquez l'adresse de livraison");
+  const items = cart.map(lineP).filter(Boolean).map(({ p, u, l }) => ({ pid: p.id, name: p.name, unit: u.n, qty: l.qty, price: u.p }));
+  if (!items.length) return;
+  const id = rid(20), no = 'W' + (Date.now() % 1679616).toString(36).toUpperCase().padStart(4, '0') + rid(2).toUpperCase();
+  const o = { id, no, ts: Date.now(), status: 'new', src: 'web', name, phone, mode, addr: mode === 'delivery' ? addr : '', pay: f.pay.value, note: f.note.value.trim(), items, total: Math.round(items.reduce((s, i) => s + i.price * i.qty, 0) * 100) / 100, rate: cfg.rate };
+  const b = $('#osend'); b.disabled = true; b.textContent = 'Envoiâ€¦';
+  try { await Promise.race([setDoc(doc(db, 'orders', id), o), new Promise((_, rj) => setTimeout(() => rj(new Error('timeout')), 20000))]); }
+  catch (err) { b.disabled = false; b.textContent = 'Envoyer ma commande'; return toast('Envoi impossible. VÃ©rifiez votre connexion et rÃ©essayez.'); }
+  try { localStorage.setItem('ksp_last', String(Date.now())); localStorage.setItem('ksp_cust', JSON.stringify({ name, phone, addr })); const m = myOrders(); m.unshift({ id, no, ts: o.ts }); localStorage.setItem('ksp_orders', JSON.stringify(m.slice(0, 20))); } catch { /* */ }
+  cart = []; saveCart(); bar();
+  const link = location.origin + location.pathname + '?c=' + id, txt = `Bonjour, je viens de passer la commande ${no} (${fmt(o.total)[0]}) sur votre boutique.\n${items.map(i => `â€¢ ${i.qty} Ã— ${i.name}`).join('\n')}\nVoir : ${link}`;
+  openSheet(`<div class="ok"><div class="big">âœ…</div><h2 style="justify-content:center">Commande envoyÃ©e !</h2><p>Votre numÃ©ro de commande :</p><div class="no">${esc(no)}</div><p class="pr2">Nous vous appellerons au ${esc(phone)} pour confirmer.</p></div>
+  ${cfg.wa ? `<a class="btn" style="display:block;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/${esc(cfg.wa)}?text=${encodeURIComponent(txt)}">ðŸ’¬ PrÃ©venir la boutique sur WhatsApp</a><div style="height:8px"></div>` : ''}
+  <button class="btn gh" id="tr">Suivre ma commande</button><div style="height:8px"></div><button class="btn gh" data-x>Continuer mes achats</button>`);
+  $('#tr').onclick = () => track(id);
+}
+function track(id) {
+  openSheet('<div class="empty">Chargementâ€¦</div>'); if (unsub) unsub();
+  unsub = onSnapshot(doc(db, 'orders', id), s => {
+    if (!s.exists()) { $('#sh').innerHTML = '<h2>Commande introuvable <button class="x" data-x>âœ•</button></h2><p class="msg">Ce numÃ©ro de suivi n\'existe pas.</p>'; return; }
+    const o = s.data(), i = ST.findIndex(x => x[0] === o.status), canc = o.status === 'cancelled';
+    $('#sh').innerHTML = `<h2>Commande ${esc(o.no)} <button class="x" data-x>âœ•</button></h2>${canc ? '<div class="info" style="background:#E4572E22">Cette commande a Ã©tÃ© annulÃ©e. Contactez la boutique si besoin.</div>' : `<div class="tl">${ST.map((x, k) => `<div class="${k <= i ? 'on' : ''}"><i>${k <= i ? 'âœ“' : k + 1}</i>${x[1]}</div>`).join('')}</div>`}
+    ${(o.items || []).map(l => `<div class="ln"><div class="t"><b>${esc(l.name)}</b><small>${esc(l.unit)} Ã— ${esc(l.qty)}</small></div><b>${fmt(l.price * l.qty)[0]}</b></div>`).join('')}
+    <div class="tot"><span>Total</span><span>${fmt(o.total)[0]}</span></div><p class="pr2">${o.mode === 'delivery' ? 'ðŸšš Livraison : ' + esc(o.addr) : 'ðŸª Retrait en boutique'} Â· ${o.pay === 'momo' ? 'ðŸ“± Mobile Money' : 'ðŸ’µ EspÃ¨ces'}</p>
+    ${cfg.wa ? `<a class="btn gh" style="display:block;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/${esc(cfg.wa)}?text=${encodeURIComponent('Bonjour, au sujet de ma commande ' + o.no)}">ðŸ’¬ Contacter la boutique</a>` : ''}`;
+  }, () => { $('#sh').innerHTML = '<h2>Suivi indisponible <button class="x" data-x>âœ•</button></h2><p class="msg">RÃ©essayez dans un instant.</p>'; });
+}
+function openMine() {
+  const m = myOrders(); openSheet(`<h2>Mes commandes <button class="x" data-x>âœ•</button></h2>${m.length ? m.map(o => `<div class="ln"><div class="t"><b>${esc(o.no)}</b><small>${new Date(o.ts).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</small></div><button class="chip" data-tr="${esc(o.id)}">Suivre</button></div>`).join('') : '<p class="msg">Vous n\'avez pas encore passÃ© de commande depuis cet appareil.</p>'}`);
+  $('#sh').querySelectorAll('[data-tr]').forEach(b => b.onclick = () => track(b.dataset.tr));
+}
+load();
+</script>
+</body>
+</html>
