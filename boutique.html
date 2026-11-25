@@ -84,8 +84,12 @@ const fmt = (usd) => { const r = cfg?.rate || 1, c = Math.round(usd * r).toLocal
 const mk = () => Math.max(0, +cfg?.mark || 0);
 const oldP = usd => { const m = 1 + mk() / 100, r = cfg?.rate || 1; return cfg?.cur === 'USD' ? '$' + (Math.round(usd * m * 100) / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : (Math.round(usd * m * r / 100) * 100).toLocaleString('fr-FR') + ' FC'; };
 const dcPct = () => Math.round((1 - 1 / (1 + mk() / 100)) * 100);
-const toast = m => { const t = $('#toast'); t.textContent = m; t.classList.add('on'); setTimeout(() => t.classList.remove('on'), 2200); };
 const rid = n => { const a = new Uint8Array(n); crypto.getRandomValues(a); return [...a].map(x => 'abcdefghijkmnpqrstuvwxyz23456789'[x % 32]).join(''); };
+const lsg = k => { try { return localStorage.getItem(k) || ''; } catch { return ''; } }, lss = (k, v) => { try { localStorage.setItem(k, v); } catch { /* */ } };
+let vid = lsg('ksp_vid'); if (!vid) { vid = rid(16); lss('ksp_vid', vid); }
+const seenAdd = new Set();
+const vlog = (kind, extra = {}) => { try { const id = rid(20); setDoc(doc(db, 'visits', id), { id, ts: Date.now(), vid, kind, name: lsg('ksp_vname').slice(0, 40), pid: '', pn: '', ...extra }).catch(() => {}); } catch { /* */ } };
+const toast = m => { const t = $('#toast'); t.textContent = m; t.classList.add('on'); setTimeout(() => t.classList.remove('on'), 2200); };
 const ST = [['new', 'Re\u00e7ue'], ['confirmed', 'Confirm\u00e9e'], ['ready', 'Pr\u00eate'], ['done', 'Termin\u00e9e']];
 const openSheet = h => { $('#sh').innerHTML = h; $('#sheet').classList.add('on'); };
 const closeSheet = () => { $('#sheet').classList.remove('on'); if (unsub) { unsub(); unsub = null; } };
@@ -102,11 +106,13 @@ async function load() {
   $('#foot').innerHTML = `${esc(cfg.name)}${cfg.addr ? ' \u00b7 ' + esc(cfg.addr) : ''}${cfg.phone ? '<br>\ud83d\udcde ' + esc(cfg.phone) : ''}`;
   cart = cart.filter(l => prods.some(p => p.id === l.pid)); saveCart();
   paint(); bar();
+  try { if (!sessionStorage.getItem('ksp_vs')) { sessionStorage.setItem('ksp_vs', '1'); vlog('visit'); } } catch { vlog('visit'); }
   const c = new URLSearchParams(location.search).get('c'); if (c) track(c);
 }
 function paint() {
   const L = prods.filter(p => (!cat || p.cat === cat) && (!q || (p.name + ' ' + (p.brand || '')).toLowerCase().includes(q.toLowerCase()))).sort((a, b) => (b.inStock - a.inStock) || a.name.localeCompare(b.name));
   $('#main').innerHTML = `<div class="warn">\u26a0\ufe0f <b>NE PAYEZ RIEN EN LIGNE.</b> Vous payez <b>uniquement \u00e0 la r\u00e9ception</b> de votre commande (livraison ou retrait en boutique), en main propre. N'envoyez jamais d'argent avant, m\u00eame si on vous le demande par message ou par appel.</div>${cfg.msg ? `<div class="msg">${esc(cfg.msg)}</div>` : ''}
+  ${cfg.ask !== false && !lsg('ksp_vname') && !lsg('ksp_vask') ? `<div class="msg" id="askn"><b>\ud83d\udc4b Bienvenue !</b> Comment vous appelez-vous ? <small>(facultatif : votre pr\u00e9nom et vos visites sont enregistr\u00e9s par la boutique pour mieux vous servir)</small><div style="display:flex;gap:8px;margin-top:8px"><input id="askv" type="text" maxlength="40" placeholder="Votre pr\u00e9nom" autocomplete="given-name" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--tx);font-size:1rem"><button class="chip on" id="askok">OK</button><button class="chip" id="asknop">Non merci</button></div></div>` : ''}
   <div class="sb"><input id="q" type="search" placeholder="Rechercher un produit\u2026" value="${esc(q)}" autocomplete="off"></div>
   ${(cfg.cats || []).length > 1 ? `<div class="chips"><button class="chip ${cat ? '' : 'on'}" data-cat="">Tout</button>${cfg.cats.map(c => `<button class="chip ${cat === c.id ? 'on' : ''}" data-cat="${esc(c.id)}">${esc(c.name)}</button>`).join('')}</div>` : ''}
   <div class="grid">${L.map(p => { const ui = 0, u = p.units[ui], pr = fmt(u.p); return `<div class="p" data-pid="${esc(p.id)}"><div class="im">${p.photo ? `<img loading="lazy" src="${esc(p.photo)}" alt="">` : esc(p.name[0])}${p.inStock ? '' : '<span class="out">\u00c9puis\u00e9</span>'}</div>
@@ -124,7 +130,7 @@ document.addEventListener('click', e => {
   if (t.dataset.cat != null && t.classList.contains('chip')) { cat = t.dataset.cat; paint(); }
   else if (t.hasAttribute('data-add')) { const card = t.closest('.p'), p = prods.find(x => x.id === card.dataset.pid), ui = +(card.querySelector('[data-u]')?.value || 0), u = p.units[ui];
     const l = cart.find(x => x.pid === p.id && x.ui === ui), have = l ? l.qty : 0; if (have + 1 > u.lim) return toast('Quantit\u00e9 maximale disponible atteinte');
-    if (l) l.qty++; else cart.push({ pid: p.id, ui, qty: 1 }); saveCart(); bar(); toast(p.name + ' ajout\u00e9'); }
+    if (l) l.qty++; else cart.push({ pid: p.id, ui, qty: 1 }); saveCart(); bar(); if (!seenAdd.has(p.id)) { seenAdd.add(p.id); vlog('add', { pid: String(p.id).slice(0, 60), pn: String(p.name).slice(0, 60) }); } toast(p.name + ' ajout\u00e9'); }
   else if (t.id === 'bbtn') openCart();
   else if (t.id === 'mine') { e.preventDefault(); openMine(); }
 });
@@ -159,12 +165,13 @@ async function send(e) {
   const items = cart.map(lineP).filter(Boolean).map(({ p, u, l }) => ({ pid: p.id, name: p.name, unit: u.n, qty: l.qty, price: u.p }));
   if (!items.length) return;
   const id = rid(20), no = 'W' + (Date.now() % 1679616).toString(36).toUpperCase().padStart(4, '0') + rid(2).toUpperCase();
-  const o = { id, no, ts: Date.now(), status: 'new', src: 'web', name, phone, mode, addr: mode === 'delivery' ? addr : '', pay: f.pay.value, note: f.note.value.trim(), items, total: Math.round(items.reduce((s, i) => s + i.price * i.qty, 0) * 100) / 100, rate: cfg.rate };
+  const o = { id, no, vid, ts: Date.now(), status: 'new', src: 'web', name, phone, mode, addr: mode === 'delivery' ? addr : '', pay: f.pay.value, note: f.note.value.trim(), items, total: Math.round(items.reduce((s, i) => s + i.price * i.qty, 0) * 100) / 100, rate: cfg.rate };
   const b = $('#osend'); b.disabled = true; b.textContent = 'Envoi\u2026';
   try { await Promise.race([setDoc(doc(db, 'orders', id), o), new Promise((_, rj) => setTimeout(() => rj(new Error('timeout')), 20000))]); }
   catch (err) { b.disabled = false; b.textContent = 'Envoyer ma commande'; return toast('Envoi impossible. V\u00e9rifiez votre connexion et r\u00e9essayez.'); }
   try { localStorage.setItem('ksp_last', String(Date.now())); localStorage.setItem('ksp_cust', JSON.stringify({ name, phone, addr })); const m = myOrders(); m.unshift({ id, no, ts: o.ts }); localStorage.setItem('ksp_orders', JSON.stringify(m.slice(0, 20))); } catch { /* */ }
   cart = []; saveCart(); bar();
+  if (!lsg('ksp_vname')) { lss('ksp_vname', name.slice(0, 40)); vlog('name'); }
   const link = location.origin + location.pathname + '?c=' + id, txt = `Bonjour, je viens de passer la commande ${no} (${fmt(o.total)[0]}) sur votre boutique.\n${items.map(i => `\u2022 ${i.qty} \u00d7 ${i.name}`).join('\n')}\nVoir : ${link}`;
   openSheet(`<div class="ok"><div class="big">\u2705</div><h2 style="justify-content:center">Commande envoy\u00e9e !</h2><p>Votre num\u00e9ro de commande :</p><div class="no">${esc(no)}</div><p class="pr2">Nous vous appellerons au ${esc(phone)} pour confirmer.</p></div><div class="warn">\u26a0\ufe0f <b>Ne payez rien \u00e0 l'avance.</b> Vous paierez \u00e0 la r\u00e9ception de votre commande.</div>
   ${cfg.wa ? `<a class="btn" style="display:block;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/${esc(cfg.wa)}?text=${encodeURIComponent(txt)}">\ud83d\udcac Pr\u00e9venir la boutique sur WhatsApp</a><div style="height:8px"></div>` : ''}
@@ -186,6 +193,11 @@ function openMine() {
   const m = myOrders(); openSheet(`<h2>Mes commandes <button class="x" data-x>\u2715</button></h2>${m.length ? m.map(o => `<div class="ln"><div class="t"><b>${esc(o.no)}</b><small>${new Date(o.ts).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</small></div><button class="chip" data-tr="${esc(o.id)}">Suivre</button></div>`).join('') : '<p class="msg">Vous n\'avez pas encore pass\u00e9 de commande depuis cet appareil.</p>'}`);
   $('#sh').querySelectorAll('[data-tr]').forEach(b => b.onclick = () => track(b.dataset.tr));
 }
+document.addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.id === 'askok') { const n = ($('#askv')?.value || '').trim().slice(0, 40); if (!n) return; lss('ksp_vname', n); vlog('name'); $('#askn')?.remove(); toast('Merci ' + n + ' !'); }
+  else if (t.id === 'asknop') { lss('ksp_vask', '1'); $('#askn')?.remove(); }
+});
 load();
 </script>
 </body>
