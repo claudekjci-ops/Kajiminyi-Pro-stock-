@@ -1655,8 +1655,10 @@ async function scanCode(onCode, { continuous = false, title = 'Scanner un code-b
   const w = modal(title, `<div class="scanbox"><video id="scv" playsinline muted autoplay></video><i class="scanline"></i></div>
     <div class="row sp" style="margin-top:8px"><button type="button" class="btn ghost sm" id="sctorch" hidden>🔦 Lampe</button><span id="scmsg" class="muted sm">Placez le code dans le cadre</span></div>
     <form class="row" id="scman" style="margin-top:8px;flex-wrap:nowrap"><input name="c" placeholder="Ou saisissez le code" inputmode="numeric" autocomplete="off" style="flex:1;min-width:0"><button class="btn sm">OK</button></form>`);
-  let stream, on = true, last = '', lastT = 0, zr = null;
-  const stop = () => { on = false; try { zr?.reset(); } catch { /* */ } stream?.getTracks().forEach(t => t.stop()); };
+  let stream, on = true, last = '', lastT = 0, zr = null, wd = 0;
+  // coupe TOUJOURS la caméra : fermeture par la croix, par le code scanné, par un changement d'écran ou si l'application passe en arrière-plan
+  const stop = () => { on = false; clearInterval(wd); try { zr?.reset(); } catch { /* */ } try { stream?.getTracks().forEach(t => t.stop()); } catch { /* */ } try { const v = $('#scv', w); if (v) v.srcObject = null; } catch { /* */ } };
+  wd = setInterval(() => { if (!on) return clearInterval(wd); if (!w.isConnected) stop(); else if (document.hidden) { stop(); w.close(); } }, 500);
   const msg = t => { const m = $('#scmsg', w); if (m) m.textContent = t; };
   const got = code => {
     code = String(code || '').trim(); if (!code) return; const t = Date.now(); if (code === last && t - lastT < 1800) return; last = code; lastT = t;
@@ -1668,6 +1670,7 @@ async function scanCode(onCode, { continuous = false, title = 'Scanner un code-b
     const v = $('#scv', w);
     if ('BarcodeDetector' in window) {
       stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } } });
+      if (!on) { stream.getTracks().forEach(t => t.stop()); return; }
       const tr = stream.getVideoTracks()[0], caps = tr.getCapabilities?.() || {};
       try { if (caps.focusMode?.includes('continuous')) await tr.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }); } catch { /* */ }
       if (caps.torch) { const tb = $('#sctorch', w); tb.hidden = false; let lit = false; tb.onclick = async () => { lit = !lit; try { await tr.applyConstraints({ advanced: [{ torch: lit }] }); } catch { /* */ } }; }
@@ -1676,12 +1679,13 @@ async function scanCode(onCode, { continuous = false, title = 'Scanner un code-b
       const det = new BarcodeDetector(fm?.length ? { formats: fm } : undefined);
       while (on) { const r = await det.detect(v).catch(() => []); if (r.length) got(r[0].rawValue); await new Promise(r => setTimeout(r, 120)); }
     } else {
-      msg('Chargement du lecteur…'); await loadZX();
+      msg('Chargement du lecteur…'); await loadZX(); if (!on) return;
       zr = new ZXing.BrowserMultiFormatReader();
       await zr.decodeFromConstraints({ video: { facingMode: { ideal: 'environment' } } }, v, res => { if (res && on) got(res.getText()); });
+      if (!on) { try { zr.reset(); } catch { /* */ } return; }
       msg('Placez le code dans le cadre');
     }
-  } catch { msg('Caméra indisponible ou refusée : saisissez le code ci-dessous'); }
+  } catch { try { stream?.getTracks().forEach(t => t.stop()); zr?.reset(); } catch { /* */ } msg('Caméra indisponible ou refusée : saisissez le code ci-dessous'); }
 }
 
 {
