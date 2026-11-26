@@ -58,6 +58,13 @@ label{display:block;font-size:.85rem;color:var(--mu);margin:10px 0 4px}
 .tl div.on{color:var(--g);font-weight:700}.tl div.on i{background:var(--g)}
 .warn{background:#E4572E18;border:2px solid #E4572E;border-radius:14px;padding:12px 14px;margin:0 0 12px;font-size:.92rem;line-height:1.4;color:var(--tx)}.warn b{color:#E4572E}
 .pr s{color:var(--mu);font-weight:400;font-size:.85rem;margin-right:6px}.dc{display:inline-block;background:#E4572E;color:#fff;font-size:.7rem;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:4px;vertical-align:middle}
+.p .im{cursor:zoom-in}.zm{position:absolute;right:8px;bottom:8px;background:#0007;color:#fff;border-radius:50%;width:30px;height:30px;display:grid;place-items:center;font-size:.95rem;pointer-events:none}
+.lb{position:fixed;inset:0;background:#000f;z-index:80;display:none;flex-direction:column}.lb.on{display:flex}
+.lb .top{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;color:#fff;font-size:.85rem}.lb .top button{background:#fff3;color:#fff;border:0;border-radius:50%;width:42px;height:42px;font-size:1.3rem;cursor:pointer}
+.lb .st{flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;-webkit-overflow-scrolling:touch}
+.lb img{width:100%;height:100%;object-fit:contain;cursor:zoom-in}
+.lb.z .st{display:block}.lb.z img{width:230%;height:auto;cursor:zoom-out}
+.lb .cap{background:var(--card);padding:12px 14px calc(12px + env(safe-area-inset-bottom));display:flex;gap:12px;align-items:center}
 .empty{text-align:center;color:var(--mu);padding:40px 10px}
 footer{text-align:center;color:var(--mu);font-size:.8rem;padding:20px 14px}
 .toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:#14231c;color:#fff;padding:10px 16px;border-radius:20px;font-size:.9rem;z-index:99;opacity:0;pointer-events:none;transition:.25s}.toast.on{opacity:1}
@@ -69,6 +76,7 @@ footer{text-align:center;color:var(--mu);font-size:.8rem;padding:20px 14px}
 <footer id="foot"></footer>
 <div class="bar" id="bar"><button class="btn" id="bbtn"><span id="bn">Voir mon panier</span><b id="bt"></b></button></div>
 <div class="sheet" id="sheet"><div class="sh" id="sh"></div></div>
+<div class="lb" id="lb"><div class="top"><span>Touchez la photo pour zoomer</span><button id="lbx" aria-label="Fermer">&#x2715;</button></div><div class="st"></div><div class="cap"></div></div>
 <div class="toast" id="toast"></div>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -115,7 +123,7 @@ function paint() {
   ${cfg.ask !== false && !lsg('ksp_vname') && !lsg('ksp_vask') ? `<div class="msg" id="askn"><b>\ud83d\udc4b Bienvenue !</b> Comment vous appelez-vous ? <small>(facultatif : votre pr\u00e9nom et vos visites sont enregistr\u00e9s par la boutique pour mieux vous servir)</small><div style="display:flex;gap:8px;margin-top:8px"><input id="askv" type="text" maxlength="40" placeholder="Votre pr\u00e9nom" autocomplete="given-name" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--tx);font-size:1rem"><button class="chip on" id="askok">OK</button><button class="chip" id="asknop">Non merci</button></div></div>` : ''}
   <div class="sb"><input id="q" type="search" placeholder="Rechercher un produit\u2026" value="${esc(q)}" autocomplete="off"></div>
   ${(cfg.cats || []).length > 1 ? `<div class="chips"><button class="chip ${cat ? '' : 'on'}" data-cat="">Tout</button>${cfg.cats.map(c => `<button class="chip ${cat === c.id ? 'on' : ''}" data-cat="${esc(c.id)}">${esc(c.name)}</button>`).join('')}</div>` : ''}
-  <div class="grid">${L.map(p => { const ui = 0, u = p.units[ui], pr = fmt(u.p); return `<div class="p" data-pid="${esc(p.id)}"><div class="im">${p.photo ? `<img loading="lazy" src="${esc(p.photo)}" alt="">` : esc(p.name[0])}${p.inStock ? '' : '<span class="out">\u00c9puis\u00e9</span>'}</div>
+  <div class="grid">${L.map(p => { const ui = 0, u = p.units[ui], pr = fmt(u.p); return `<div class="p" data-pid="${esc(p.id)}"><div class="im">${p.photo ? `<img loading="lazy" src="${esc(p.photo)}" alt=""><span class="zm">\ud83d\udd0d</span>` : esc(p.name[0])}${p.inStock ? '' : '<span class="out">\u00c9puis\u00e9</span>'}</div>
     <div class="bd"><h3>${esc(p.name)}</h3>${p.brand ? `<small>${esc(p.brand)}</small>` : ''}
     ${p.units.length > 1 ? `<select data-u>${p.units.map((x, i) => `<option value="${i}" ${x.lim > 0 ? '' : 'disabled'}>${esc(x.n)}${x.f > 1 ? ' (\u00d7' + x.f + ')' : ''}</option>`).join('')}</select>` : `<small>par ${esc(u.n)}</small>`}
     <div class="pr"><span data-old>${mk() ? `<s>${oldP(u.p)}</s>` : ''}</span><span data-pr>${pr[0]}</span>${mk() ? `<span class="dc">-${dcPct()}%</span>` : ''}</div><div class="pr2" data-pr2>${pr[1]}</div>
@@ -125,7 +133,24 @@ document.addEventListener('input', e => { if (e.target.id === 'q') { q = e.targe
 document.addEventListener('change', e => {
   if (e.target.matches('[data-u]')) { const card = e.target.closest('.p'), p = prods.find(x => x.id === card.dataset.pid), u = p.units[+e.target.value], pr = fmt(u.p); card.querySelector('[data-pr]').textContent = pr[0]; const od = card.querySelector('[data-old]'); if (od && mk()) od.innerHTML = '<s>' + oldP(u.p) + '</s>'; card.querySelector('[data-pr2]').textContent = pr[1]; }
 });
+async function zoom(pid) {
+  const p = prods.find(x => x.id === pid); if (!p || !p.photo) return;
+  const lb = $('#lb'), u = p.units[0], pr = fmt(u.p); lb.classList.remove('z'); lb.classList.add('on');
+  lb.querySelector('.st').innerHTML = `<img id="lbi" src="${esc(p.photo)}" alt="${esc(p.name)}">`;
+  lb.querySelector('.cap').innerHTML = `<div style="flex:1;min-width:0"><b>${esc(p.name)}</b>${p.brand ? `<br><small style="color:var(--mu)">${esc(p.brand)}</small>` : ''}<div class="pr">${mk() ? `<s>${oldP(u.p)}</s>` : ''}${pr[0]} <span class="pr2">${pr[1]}</span></div></div>${p.inStock ? `<button class="btn" id="lbadd" data-pid="${esc(p.id)}" style="width:auto">Ajouter au panier</button>` : '<span class="out" style="position:static">\u00c9puis\u00e9</span>'}`;
+  try { const s = await getDoc(doc(db, 'shopbig', pid)); if (s.exists() && lb.classList.contains('on') && $('#lbi') && s.data().photo) $('#lbi').src = s.data().photo; } catch { /* grande photo absente : on garde la miniature */ }
+}
+const closeZoom = () => { $('#lb').classList.remove('on', 'z'); };
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeZoom(); });
 document.addEventListener('click', e => {
+  const lbx = e.target.closest('#lb');
+  if (lbx) {
+    if (e.target.closest('#lbx') || e.target.classList.contains('st')) return closeZoom();
+    if (e.target.id === 'lbi') { const lb = $('#lb'); lb.classList.toggle('z'); const st = lb.querySelector('.st'); setTimeout(() => { st.scrollLeft = (st.scrollWidth - st.clientWidth) / 2; st.scrollTop = (st.scrollHeight - st.clientHeight) / 2; }, 30); return; }
+    if (e.target.id === 'lbadd') { const b = document.querySelector('.p[data-pid="' + e.target.dataset.pid + '"] [data-add]'); if (b) b.click(); closeZoom(); return; }
+    return;
+  }
+  const im = e.target.closest('.p .im'); if (im && im.querySelector('img')) { zoom(im.closest('.p').dataset.pid); return; }
   const t = e.target.closest('button,a'); if (!t) return;
   if (t.dataset.cat != null && t.classList.contains('chip')) { cat = t.dataset.cat; paint(); }
   else if (t.hasAttribute('data-add')) { const card = t.closest('.p'), p = prods.find(x => x.id === card.dataset.pid), ui = +(card.querySelector('[data-u]')?.value || 0), u = p.units[ui];
