@@ -1,5 +1,5 @@
 // Service Worker KAJIMINYI STOCK PRO — fonctionnement hors connexion (version tout-en-un)
-const V = 'ksp-v16';
+const V = 'ksp-v17';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 const CDN = ['www.gstatic.com', 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
